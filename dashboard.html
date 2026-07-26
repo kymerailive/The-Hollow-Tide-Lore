@@ -228,6 +228,7 @@
     <span class="tab" data-view="players">Players</span>
     <span class="tab" data-view="npcs">NPCs</span>
     <span class="tab" data-view="items">Items</span>
+    <span class="tab" data-view="quests">Questlines</span>
   </nav>
   <button id="newplacebtn" title="Add a new place to the island" style="margin-left:auto">＋ Place</button>
   <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
@@ -291,6 +292,15 @@
     <div id="ilist" style="margin-top:8px"></div>
   </div>
   <div class="editor card" id="iedit"><p class="muted">Select an item.</p></div>
+</section>
+
+<section class="view" id="view-quests">
+  <div class="listpane card">
+    <input class="search" id="qsearch" type="text" placeholder="Search questlines…">
+    <button class="btn mini" id="qnew">＋ New questline</button>
+    <div id="qlist" style="margin-top:8px"></div>
+  </div>
+  <div class="editor card" id="qedit"><p class="muted">Select a questline.</p></div>
 </section>
 </main>
 
@@ -469,6 +479,7 @@ function switchView(v) {
   if (v === "players") Players.load();
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
+  if (v === "quests") Quests.load();
 }
 
 /* ================= MAP ================= */
@@ -1450,6 +1461,139 @@ const Items = {
 };
 $("#isearch").oninput = () => Items.renderList();
 $("#inew").onclick = () => { Items.creating = true; Items.renderEditor(); };
+
+/* ================= QUESTLINES ================= */
+const Quests = {
+  data: null, sel: null, creating: false,
+  ORDER: ["active", "draft", "completed", "archived"],
+  async load() {
+    try { this.data = await api("/api/dash/quests"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  renderList() {
+    const q = $("#qsearch").value.trim().toLowerCase();
+    const box = $("#qlist");
+    box.innerHTML = "";
+    const rows = [...this.data.quests].sort((a, b) =>
+      this.ORDER.indexOf(a.status) - this.ORDER.indexOf(b.status) ||
+      a.title.localeCompare(b.title));
+    let lastStatus = null;
+    for (const it of rows) {
+      if (q && !(it.title + " " + (it.giver || "")).toLowerCase().includes(q))
+        continue;
+      if (it.status !== lastStatus) {
+        lastStatus = it.status;
+        const h = document.createElement("div");
+        h.className = "cathdr";
+        h.textContent = it.status[0].toUpperCase() + it.status.slice(1);
+        box.appendChild(h);
+      }
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === it.key ? " sel" : "");
+      const done = (it.beats || []).filter(b => b.done).length;
+      const total = (it.beats || []).length;
+      row.innerHTML = `<span class="nm">${esc(it.title)}</span>
+        <span class="fx" title="beats done">${total ? done + "/" + total : ""}</span>`;
+      row.onclick = () => { this.sel = it.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+    if (!box.childElementCount)
+      box.innerHTML = "<p class='muted'>No questlines yet — make the first one.</p>";
+  },
+  quest() { return this.data.quests.find(i => i.key === this.sel); },
+  // Beats live in a textarea, one per line; a leading "x " marks one done.
+  beatsText(beats) {
+    return (beats || []).map(b => (b.done ? "x " : "") + b.text).join("\n");
+  },
+  parseBeats(text) {
+    return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      const m = l.match(/^(?:x|\[x\])\s+(.*)$/i);
+      return m ? { text: m[1], done: true } : { text: l, done: false };
+    });
+  },
+  renderEditor() {
+    const box = $("#qedit");
+    const it = this.creating
+      ? { title: "", status: "draft", giver: "", place: "", summary: "",
+          dm: "", reward: "", beats: [], author: localStorage.getItem("ht_author") || "" }
+      : this.quest();
+    if (!it) { box.innerHTML = "<p class='muted'>Select a questline.</p>"; return; }
+    const places = Object.entries(this.data.places)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    box.innerHTML = `
+      <h2>${this.creating ? "New questline" : esc(it.title)}</h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Title</label>
+            <input type="text" id="qf-title" value="${esc(it.title)}"></div>
+          <div><label>Status</label><select id="qf-status">
+            ${this.data.statuses.map(s =>
+              `<option value="${s}" ${it.status === s ? "selected" : ""}>${s}</option>`).join("")}
+          </select></div>
+          <div><label>Quest giver (NPC)</label>
+            <input type="text" id="qf-giver" value="${esc(it.giver || "")}"></div>
+          <div><label>Place</label><select id="qf-place">
+            <option value="">— nowhere specific —</option>
+            ${places.map(([k, n]) =>
+              `<option value="${k}" ${it.place === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
+          </select></div>
+          <div><label>Reward</label>
+            <input type="text" id="qf-reward" value="${esc(it.reward || "")}"></div>
+          <div><label>Your name (for the audit log)</label>
+            <input type="text" id="qf-author" value="${esc(it.author || "")}"></div>
+        </div>
+        <label>Summary — what players can learn</label>
+        <textarea id="qf-summary" rows="3">${esc(it.summary || "")}</textarea>
+        <label>Beats / objectives — one per line, start a line with "x " when done</label>
+        <textarea id="qf-beats" rows="5">${esc(this.beatsText(it.beats))}</textarea>
+        <label>DM notes — twists, solutions, secrets (never player-facing)</label>
+        <textarea id="qf-dm" rows="6">${esc(it.dm || "")}</textarea>
+        ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
+        <div class="btnrow">
+          <button class="btn primary" id="qf-save">${this.creating ? "Create questline" : "Save questline"}</button>
+          ${this.creating ? '<button class="btn" id="qf-cancel">Cancel</button>'
+                          : '<button class="btn danger" id="qf-del">Delete…</button>'}
+        </div>
+      </div>`;
+    $("#qf-save").onclick = () => {
+      const author = $("#qf-author").value.trim();
+      if (author) localStorage.setItem("ht_author", author);
+      api("/api/dash/quest", {
+        key: this.creating ? null : it.key,
+        title: $("#qf-title").value,
+        status: $("#qf-status").value,
+        giver: $("#qf-giver").value,
+        place: $("#qf-place").value,
+        reward: $("#qf-reward").value,
+        summary: $("#qf-summary").value,
+        beats: this.parseBeats($("#qf-beats").value),
+        dm: $("#qf-dm").value,
+        author,
+      }).then(j => {
+        toast(this.creating ? "Questline created" : "Questline saved");
+        this.creating = false;
+        this.sel = j.key;
+        this.load();
+      }).catch(e2 => toast(e2.message, true));
+    };
+    if (this.creating) {
+      $("#qf-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+    } else {
+      $("#qf-del").onclick = () => {
+        if (!confirm(`Delete the questline “${it.title}”? This can't be undone.`))
+          return;
+        api("/api/dash/quest-delete", { key: it.key })
+          .then(() => { toast("Deleted"); Quests.sel = null; Quests.load(); })
+          .catch(e2 => toast(e2.message, true));
+      };
+    }
+  },
+};
+$("#qsearch").oninput = () => Quests.renderList();
+$("#qnew").onclick = () => { Quests.creating = true; Quests.renderEditor(); };
 
 /* ---------- boot ---------- */
 $("#cfgbtn").onclick = openGate;
