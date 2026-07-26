@@ -39,10 +39,11 @@
   header .tab:hover { color: var(--text); }
   header .tab.active { background: var(--panel2); color: var(--text);
                        box-shadow: inset 0 0 0 1px var(--line2); }
-  #arrangebtn { margin-left: auto; background: none;
+  #arrangebtn, #newplacebtn { background: none;
                 border: 1px solid var(--line2); color: var(--dim);
                 border-radius: 8px; padding: 5px 13px; font: inherit;
                 font-size: 13px; cursor: pointer; transition: all .12s; }
+  #newplacebtn:hover { color: var(--text); border-color: var(--faint); }
   #arrangebtn:hover { color: var(--text); border-color: var(--faint); }
   #cfgbtn { background: none; border: 1px solid var(--line2); color: var(--dim);
             border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 13px;
@@ -228,6 +229,7 @@
     <span class="tab" data-view="npcs">NPCs</span>
     <span class="tab" data-view="items">Items</span>
   </nav>
+  <button id="newplacebtn" title="Add a new place to the island" style="margin-left:auto">＋ Place</button>
   <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
   <span id="status">connecting…</span>
   <button id="cfgbtn" title="Bot API address & token">⚙</button>
@@ -445,6 +447,7 @@ function switchView(v) {
   document.querySelectorAll(".view").forEach(s =>
     s.classList.toggle("active", s.id === "view-" + v));
   $("#arrangebtn").style.display = v === "map" ? "" : "none";
+  $("#newplacebtn").style.display = v === "map" ? "" : "none";
   if (v === "players") Players.load();
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
@@ -540,15 +543,132 @@ function placeClicked(key) {
     render();
     return;
   }
-  $("#placecard").style.display = "";
-  $("#placename").textContent = p.name + (p.new ? " · undiscovered" : "");
-  $("#placedesc").textContent = p.desc +
-    (p.new ? `  (found by: ${(p.discovered_by || []).join(", ") || "no one yet"})` : "");
-  const here = state.players.filter(pl => pl.place === key);
-  $("#placewho").innerHTML = here.length
-    ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${pl.traveling ? " ✈" : ""}</div>`).join("")
-    : "<div class='hint'>nobody here</div>";
+  showPlace(key);
 }
+function showPlace(key) {
+  const p = state.places[key];
+  const card = $("#placecard");
+  card.style.display = "";
+  const here = state.players.filter(pl => pl.place === key);
+  card.innerHTML = `
+    <h2>${esc(p.name)}${p.new ? ' <span class="badge off">undiscovered</span>' : ""}</h2>
+    <div class="hint">${esc(p.desc || "")}${p.new
+      ? `<br>found by: ${esc((p.discovered_by || []).join(", ") || "no one yet")}` : ""}</div>
+    <div class="who" style="margin-top:6px">${here.length
+      ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${pl.traveling ? " ✈" : ""}</div>`).join("")
+      : "<div class='hint'>nobody here</div>"}</div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn mini" id="plc-edit">✎ Edit place</button>
+    </div>`;
+  $("#plc-edit").onclick = () => editPlace(key);
+}
+function placeOptions(sel, excl) {
+  return Object.entries(state.places)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .filter(([k]) => k !== excl)
+    .map(([k, v]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${esc(v.name)}</option>`)
+    .join("");
+}
+function editPlace(key) {
+  const p = state.places[key];
+  const card = $("#placecard");
+  card.style.display = "";
+  const vil = p.village;
+  card.innerHTML = `
+    <h2>Edit · ${esc(p.name)}</h2>
+    <div class="frm">
+      <label>Name</label><input type="text" id="plc-name" value="${esc(p.name)}">
+      <label>Description</label>
+      <textarea id="plc-desc" rows="2">${esc(p.desc || "")}</textarea>
+      ${vil ? `
+      <div class="grid2">
+        <div><label>Parent (road from)</label>
+          <select id="plc-parent">${placeOptions(p.parent, key)}</select></div>
+        <div><label>Walk (minutes)</label>
+          <input type="number" id="plc-min" value="${p.minutes || 60}"></div>
+      </div>
+      <label>Rumor (players see on discovery)</label>
+      <textarea id="plc-rumor" rows="3">${esc(p.rumor || "")}</textarea>
+      <label>DM note</label>
+      <textarea id="plc-dm" rows="3">${esc(p.dm || "")}</textarea>
+      <label>Teaches</label>
+      <textarea id="plc-teach" rows="2">${esc(p.teaches || "")}</textarea>` : `
+      <p class="hint" style="margin-top:8px">A canon place — name and
+      description are editable; its geography lives in the game itself.</p>`}
+      <div class="btnrow">
+        <button class="btn primary" id="plc-save">Save</button>
+        <button class="btn" id="plc-cancel">Cancel</button>
+        ${vil ? '<button class="btn danger" id="plc-del">Delete…</button>' : ""}
+      </div>
+    </div>`;
+  $("#plc-cancel").onclick = () => showPlace(key);
+  $("#plc-save").onclick = async () => {
+    const body = { key, name: $("#plc-name").value, desc: $("#plc-desc").value };
+    if (vil) {
+      body.parent = $("#plc-parent").value;
+      body.minutes = parseInt($("#plc-min").value || "60", 10);
+      body.rumor = $("#plc-rumor").value;
+      body.dm = $("#plc-dm").value;
+      body.teaches = $("#plc-teach").value;
+    }
+    try {
+      const r = await api("/api/dash/place", body);
+      toast(r.changed.length ? "Saved: " + r.changed.join(", ") : "No changes");
+      await refresh();
+      showPlace(key);
+    } catch (e) { toast(e.message, true); }
+  };
+  if (vil) $("#plc-del").onclick = async () => {
+    if (!confirm(`Delete ${p.name}? Its road, pin, and discovery records go with it.`))
+      return;
+    try {
+      await api("/api/dash/place-delete", { key });
+      toast(`${p.name} deleted`);
+      card.style.display = "none";
+      refresh();
+    } catch (e) { toast(e.message, true); }
+  };
+}
+$("#newplacebtn").onclick = () => {
+  if (!state) return;
+  const card = $("#placecard");
+  card.style.display = "";
+  card.innerHTML = `
+    <h2>New place</h2>
+    <p class="hint">Created as an undiscovered village on the travel graph —
+    players find it by passing it. Drag its pin in Arrange mode after.</p>
+    <div class="frm">
+      <label>Name</label><input type="text" id="npl-name">
+      <div class="grid2">
+        <div><label>Parent (road from)</label>
+          <select id="npl-parent">${placeOptions(null, null)}</select></div>
+        <div><label>Walk (minutes)</label>
+          <input type="number" id="npl-min" value="60"></div>
+      </div>
+      <label>Description</label><textarea id="npl-desc" rows="2"></textarea>
+      <label>Rumor (players see on discovery)</label>
+      <textarea id="npl-rumor" rows="2"></textarea>
+      <label>DM note</label><textarea id="npl-dm" rows="2"></textarea>
+      <div class="btnrow">
+        <button class="btn primary" id="npl-go">Create</button>
+        <button class="btn" id="npl-cancel">Cancel</button>
+      </div>
+    </div>`;
+  $("#npl-cancel").onclick = () => card.style.display = "none";
+  $("#npl-go").onclick = async () => {
+    try {
+      const r = await api("/api/dash/place-create", {
+        name: $("#npl-name").value, parent: $("#npl-parent").value,
+        minutes: parseInt($("#npl-min").value || "60", 10),
+        desc: $("#npl-desc").value, rumor: $("#npl-rumor").value,
+        dm: $("#npl-dm").value,
+      });
+      toast("Created — drag its pin into position in Arrange mode");
+      await refresh();
+      showPlace(r.key);
+    } catch (e) { toast(e.message, true); }
+  };
+};
 function canvasXY(e) {
   const r = img.getBoundingClientRect();
   return { x: (e.clientX - r.left) / r.width * state.canvas.w,
@@ -726,6 +846,17 @@ const Players = {
           <div><label style="margin-top:14px"><input type="checkbox" id="pf-hollow"
                ${p.hollow ? "checked" : ""}> Hollow side</label></div>
         </div>
+        ${p.label.toLowerCase() === "spectator"
+          ? '<p class="hint" style="margin-top:10px">Spectators don\'t appear on the map.</p>'
+          : `<label>Location</label>
+        <div style="display:flex;gap:7px">
+          <select id="pf-loc" style="flex:1">
+            <option value="">— off the map —</option>
+            ${Object.entries(this.data.places).map(([k, n]) =>
+              `<option value="${k}" ${p.place === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
+          </select>
+          <button class="btn" id="pf-locgo">Move</button>
+        </div>`}
         <label>Gif (URL or local:file)</label>
         <input type="text" id="pf-gif" value="${esc(p.gif)}">
         <label>Titles (one per line)</label>
@@ -810,6 +941,14 @@ const Players = {
       api("/api/inventory", { user_id: p.id, item, delta: qty })
         .then(() => Players.load()).catch(e => toast(e.message, true));
     };
+    const locBtn = $("#pf-locgo");
+    if (locBtn) locBtn.onclick = () => {
+      const place = $("#pf-loc").value || null;
+      api("/api/map/move", { player_id: p.id, place })
+        .then(() => { toast(place ? `${p.name} moved` : `${p.name} taken off the map`);
+                      Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
     $("#pf-save").onclick = () => {
       const body = {
         id: p.id,
@@ -870,6 +1009,15 @@ const Players = {
           <input type="number" id="tf-set" placeholder="set exact" style="width:150px">
           <button class="btn" id="tf-setb">Set</button>
         </div>
+        <label style="margin-top:14px">Team location</label>
+        <div style="display:flex;gap:7px">
+          <select id="tf-loc" style="flex:1">
+            <option value="">— pick a place —</option>
+            ${Object.entries(this.data.places).map(([k, n]) =>
+              `<option value="${k}">${esc(n)}</option>`).join("")}
+          </select>
+          <button class="btn" id="tf-locgo">Move all</button>
+        </div>
         <hr>
         <h2>Team stash <span class="muted">(what /transfer fills and /claim empties)</span></h2>
         <div id="tf-stash"></div>
@@ -877,6 +1025,12 @@ const Players = {
           <input type="text" id="tf-additem" placeholder="item name" style="flex:1">
           <input type="number" id="tf-addqty" value="1" style="width:70px">
           <button class="btn" id="tf-addbtn">Add</button>
+        </div>
+        <div class="btnrow">
+          <select id="tf-xferteam">${Object.entries(this.data.teams)
+            .filter(([g]) => g !== gid).map(([g, n]) =>
+              `<option value="${g}">${esc(n)}</option>`).join("")}</select>
+          <button class="btn" id="tf-xfer">Transfer entire stash →</button>
         </div>
         <hr>
         <p class="hint">Members: ${members.map(m => esc(m.name)).join(", ") || "none"}.
@@ -914,6 +1068,23 @@ const Players = {
       api("/api/dash/team", { team: gid, treasury_delta: delta })
         .then(() => { toast(`Team Bank ${delta > 0 ? "+" : ""}${fmt(delta)}`);
                       Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#tf-locgo").onclick = () => {
+      const place = $("#tf-loc").value;
+      if (!place) return;
+      if (!confirm(`Move ALL of ${tname} there?`)) return;
+      api("/api/map/move", { team: gid, place })
+        .then(r => { toast(`Moved ${r.moved} player(s)`); Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#tf-xfer").onclick = () => {
+      const to = $("#tf-xferteam").value;
+      if (!to) return;
+      if (!confirm(`Move the ENTIRE ${tname} stash to ${this.data.teams[to]}?`))
+        return;
+      api("/api/dash/stash-transfer", { from_team: gid, to_team: to })
+        .then(r => { toast(`${r.moved} item(s) transferred`); Players.load(); })
         .catch(e => toast(e.message, true));
     };
     $("#tf-give").onclick = () => tre(Math.abs(parseInt($("#tf-delta").value || "0", 10)));
