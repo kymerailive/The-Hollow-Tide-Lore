@@ -308,11 +308,12 @@
 <div id="tokengate" style="display:none">
   <div class="card">
     <h2>Connect to the bot</h2>
-    <p class="hint">Bot API address — leave as-is when the bot runs on this
-    machine; after the server move, put its https address here.</p>
-    <input id="apiin" type="text" placeholder="http://127.0.0.1:8787" style="width:100%;margin:8px 0 2px">
-    <p class="hint" style="margin-top:8px">Password — the dashboard password
-    (or the HT_API_TOKEN) from the bot's .env. Both are kept in this browser.</p>
+    <p class="hint">Bot API address — leave this as it comes. It already points
+    at the bot; only change it if you've been told to.</p>
+    <input id="apiin" type="text" placeholder="https://smallboi.tail7fc4d1.ts.net" style="width:100%;margin:8px 0 2px">
+    <p class="hint" style="margin-top:8px">Password — the same passcode you use
+    for the lore website. (The bot's dashboard password or HT_API_TOKEN also
+    work.) Kept in this browser only; the passcode itself is never sent.</p>
     <input id="tokenin" type="password" placeholder="password">
     <button onclick="saveToken()">Unlock</button>
   </div>
@@ -330,8 +331,18 @@ let TOKEN = localStorage.getItem("ht_token") || "";
 // in the ⚙ gate always wins.
 const SERVED_BY_BOT = location.port === "8787";
 const PUBLIC_API = "https://smallboi.tail7fc4d1.ts.net";   // the bot's Tailscale Funnel
-let API = localStorage.getItem("ht_api_base") ||
-          (SERVED_BY_BOT ? "" : (PUBLIC_API || "http://127.0.0.1:8787"));
+const LOOPBACK_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i;
+// A STORED loopback address is stale for anyone who isn't sitting at the bot
+// machine: the gate used to pre-fill 127.0.0.1 and then pin it in localStorage
+// forever, which permanently pointed remote devs at their own empty localhost.
+// Drop it in favour of the funnel; a deliberate non-loopback choice still wins.
+let storedAPI = localStorage.getItem("ht_api_base");
+if (storedAPI && PUBLIC_API && !SERVED_BY_BOT && LOOPBACK_RE.test(storedAPI)) {
+  localStorage.removeItem("ht_api_base");
+  storedAPI = null;
+}
+const API_FALLBACK = SERVED_BY_BOT ? "" : (PUBLIC_API || "http://127.0.0.1:8787");
+let API = storedAPI || API_FALLBACK;
 let state = null;          // last /api/map payload
 let teamColor = {};        // gid -> color
 let armedTeam = null;      // gid armed for whole-team move
@@ -446,7 +457,7 @@ async function saveToken() {
   switchView(Views.current);
 }
 function openGate() {
-  $("#apiin").value = API || (SERVED_BY_BOT ? "" : "http://127.0.0.1:8787");
+  $("#apiin").value = API || API_FALLBACK;
   $("#tokenin").value = TOKEN;
   $("#tokengate").style.display = "flex";
 }
