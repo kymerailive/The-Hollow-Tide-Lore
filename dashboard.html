@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LNK Mini — Dev Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1217; --bg2: #131720; --panel: #191e28; --panel2: #1f2531;
+    --line: #2a3140; --line2: #343c4e;
+    --text: #e7ebf3; --dim: #98a2b6; --faint: #6c7689;
+    --accent: #5fc077; --accent-ink: #0e2417;
+    --gold: #d9a441; --danger: #e0697a; --danger-bg: #38222a;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { scrollbar-color: #333c4d var(--bg); }
+  body { background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 240px);
+         color: var(--text); min-height: 100vh;
+         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #333c4d; border-radius: 5px;
+                              border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- header ---------- */
+  header { position: sticky; top: 0; z-index: 60; display: flex;
+           align-items: center; gap: 16px; padding: 11px 20px;
+           background: color-mix(in srgb, var(--bg2) 88%, transparent);
+           backdrop-filter: blur(10px);
+           border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; letter-spacing: .3px; font-weight: 700; }
+  header h1 span { color: var(--dim); font-weight: 500; }
+  header .tabs { display: flex; gap: 2px; background: var(--panel);
+                 border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+  header .tab { padding: 5px 14px; border-radius: 7px; color: var(--dim);
+                cursor: pointer; user-select: none; font-weight: 500;
+                transition: color .12s, background .12s; }
+  header .tab:hover { color: var(--text); }
+  header .tab.active { background: var(--panel2); color: var(--text);
+                       box-shadow: inset 0 0 0 1px var(--line2); }
+  #arrangebtn { margin-left: auto; background: none;
+                border: 1px solid var(--line2); color: var(--dim);
+                border-radius: 8px; padding: 5px 13px; font: inherit;
+                font-size: 13px; cursor: pointer; transition: all .12s; }
+  #arrangebtn:hover { color: var(--text); border-color: var(--faint); }
+  #cfgbtn { background: none; border: 1px solid var(--line2); color: var(--dim);
+            border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 13px;
+            cursor: pointer; transition: all .12s; }
+  #cfgbtn:hover { color: var(--text); border-color: var(--faint); }
+  #arrangebtn.on { border-color: var(--gold); color: var(--gold);
+                   background: rgba(217,164,65,.08); }
+  body.arrange .place .dot { outline: 2px dashed var(--gold);
+                             outline-offset: 2px; cursor: grab; }
+  #status { margin-left: 4px; color: var(--dim); font-size: 12px;
+            display: inline-flex; align-items: center; gap: 6px; }
+  #status.live::before { content: ""; width: 7px; height: 7px;
+            border-radius: 50%; background: var(--accent);
+            box-shadow: 0 0 6px var(--accent); animation: livepulse 2.4s infinite; }
+  @keyframes livepulse { 50% { opacity: .45; } }
+
+  main { padding: 16px 20px 28px; }
+  .view { display: none; }
+  .view.active { display: flex; align-items: flex-start; gap: 16px; }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--panel); border: 1px solid var(--line);
+          border-radius: var(--radius); padding: 14px 16px;
+          box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .card h2 { display: flex; align-items: center; gap: 8px; font-size: 11.5px;
+             text-transform: uppercase; letter-spacing: 1px;
+             color: var(--dim); margin-bottom: 10px; font-weight: 700; }
+  .card h2::before { content: ""; width: 3px; height: 12px; border-radius: 2px;
+                     background: var(--accent); flex-shrink: 0; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0 14px; }
+  .hint, .muted { color: var(--dim); font-size: 12.5px; line-height: 1.5; }
+
+  /* ---------- map view ---------- */
+  #mapwrap { position: relative; flex: 1; min-width: 0;
+             border: 1px solid var(--line); border-radius: var(--radius);
+             overflow: hidden; background: #0b0e13; touch-action: none;
+             box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+  #zoomer { position: absolute; inset: 0; transform-origin: 0 0; }
+  #zoomer img { display: block; width: 100%; height: auto;
+                user-select: none; -webkit-user-drag: none; }
+  #overlay { position: absolute; inset: 0; }
+  .place { position: absolute;
+           transform: translate(-50%, -50%) scale(var(--inv, 1)); }
+  .place .dot { width: 13px; height: 13px; border-radius: 50%;
+                background: #8c1d1d; border: 2px solid #fff; cursor: pointer;
+                box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .place.new .dot { background: #f4efdd; border-color: #5c3317; }
+  .place .lbl { position: absolute; left: 50%; transform: translateX(-50%);
+                bottom: 16px; white-space: nowrap; font-size: 11px;
+                font-weight: 600; color: #1e1408;
+                text-shadow: 0 0 3px #f6f1dc, 0 0 3px #f6f1dc, 0 0 4px #f6f1dc; }
+  .place.droptarget .dot { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .pawn { position: absolute; width: 17px; height: 17px; border-radius: 50%;
+          border: 2px solid #fff;
+          transform: translate(-50%, -50%) scale(var(--inv, 1));
+          cursor: grab; z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+  .pawn.traveling { opacity: .55; border-style: dashed; }
+  .pawn::after { content: ""; position: absolute; inset: -2px; border-radius: 50%;
+                 border: 2px solid currentColor;
+                 animation: ping 2.2s ease-out infinite; }
+  @keyframes ping { 0% { transform: scale(.6); opacity: .9; }
+                    80%, 100% { transform: scale(2.1); opacity: 0; } }
+  .pawn.dragging { cursor: grabbing; z-index: 50; }
+  .pawn.dragging::after { animation: none; }
+  #view-map aside { width: 272px; flex-shrink: 0; display: flex;
+                    flex-direction: column; gap: 14px; }
+  .teamrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px;
+             border-radius: 8px; cursor: pointer; transition: background .1s; }
+  .teamrow:hover { background: var(--panel2); }
+  .teamrow.armed { background: rgba(95,192,119,.1);
+                   outline: 1px solid var(--accent); }
+  .swatch { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+            box-shadow: 0 0 0 2px rgba(255,255,255,.08); }
+  .teamrow .n { margin-left: auto; color: var(--dim); font-size: 12px;
+                font-variant-numeric: tabular-nums; }
+  #placecard .who div { padding: 3px 0; }
+  .chip { display: inline-flex; align-items: center; gap: 6px;
+          margin: 2px 5px 3px 0; padding: 4px 11px; background: var(--panel2);
+          border: 1px solid var(--line); border-radius: 14px;
+          font-size: 12px; cursor: grab; }
+  .chip .swatch { width: 9px; height: 9px; }
+
+  /* ---------- list + editor ---------- */
+  .listpane { width: 340px; flex-shrink: 0; max-height: calc(100vh - 118px);
+              overflow-y: auto; }
+  .editor { flex: 1; min-width: 0; max-height: calc(100vh - 118px);
+            overflow-y: auto; }
+  .search { width: 100%; margin-bottom: 9px; }
+  input, select, textarea {
+    background: #10141b; color: var(--text); border: 1px solid var(--line2);
+    border-radius: 8px; padding: 7px 10px; font: inherit;
+    transition: border-color .12s, box-shadow .12s; }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(95,192,119,.15); }
+  input[type=checkbox] { width: auto; accent-color: var(--accent); }
+  textarea { width: 100%; resize: vertical; line-height: 1.5; }
+  .frm label { display: block; font-size: 10.5px; text-transform: uppercase;
+               letter-spacing: .9px; color: var(--dim); margin: 12px 0 4px;
+               font-weight: 600; }
+  .frm input[type=text], .frm input[type=number], .frm select { width: 100%; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  .lrow { display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+          border-radius: 8px; cursor: pointer; transition: background .1s; }
+  .lrow:hover { background: var(--panel2); }
+  .lrow.sel { background: rgba(95,192,119,.1);
+              outline: 1px solid var(--accent); }
+  .lrow .sub { margin-left: auto; color: var(--dim); font-size: 12px;
+               white-space: nowrap; font-variant-numeric: tabular-nums;
+               display: inline-flex; gap: 5px; align-items: center; }
+  .badge { font-size: 10px; padding: 2.5px 8px; border-radius: 10px;
+           background: var(--panel2); color: var(--dim); font-weight: 600;
+           letter-spacing: .3px; }
+  .badge.on { color: #8fdba2; background: rgba(95,192,119,.12); }
+  .badge.off { color: #e2b98c; background: rgba(217,164,65,.10); }
+  .badge.dead { color: var(--danger); background: var(--danger-bg); }
+  .btn { padding: 7px 15px; border-radius: 8px; border: 1px solid var(--line2);
+         cursor: pointer; background: var(--panel2); color: var(--text);
+         font: inherit; font-weight: 500; transition: all .12s; }
+  .btn:hover { border-color: var(--faint); filter: brightness(1.12); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent); border-color: var(--accent);
+                 color: var(--accent-ink); font-weight: 700; }
+  .btn.danger { background: var(--danger-bg); color: var(--danger);
+                border-color: #7c3a47; }
+  .btn.mini { padding: 2px 10px; font-size: 12px; border-radius: 6px; }
+  .btnrow { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+            align-items: center; }
+  .invrow { display: flex; align-items: center; gap: 7px; padding: 4px 0;
+            border-bottom: 1px dotted var(--line); }
+  .invrow:last-of-type { border-bottom: 0; }
+  .invrow .nm { flex: 1; min-width: 0; overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .memrow { display: flex; gap: 8px; align-items: baseline; padding: 4px 0;
+            border-bottom: 1px dotted var(--line); }
+  .memrow:last-of-type { border-bottom: 0; }
+  .memrow .t { flex: 1; line-height: 1.45; }
+
+  /* ---------- toast & gate ---------- */
+  #toast { position: fixed; bottom: 20px; left: 50%;
+           transform: translateX(-50%); background: #1d3526;
+           border: 1px solid var(--accent); color: var(--text);
+           padding: 9px 18px; border-radius: 10px; opacity: 0;
+           transition: opacity .25s; pointer-events: none; z-index: 99;
+           box-shadow: 0 6px 24px rgba(0,0,0,.45); font-size: 13.5px; }
+  #toast.err { background: var(--danger-bg); border-color: var(--danger); }
+  #tokengate { position: fixed; inset: 0; background: rgba(8,10,14,.94);
+               display: flex; align-items: center; justify-content: center;
+               z-index: 100; }
+  #tokengate .card { width: 340px; box-shadow: 0 12px 48px rgba(0,0,0,.6); }
+  #tokengate input { width: 100%; margin: 10px 0; }
+  #tokengate button { width: 100%; padding: 9px; background: var(--accent);
+                      border: 0; border-radius: 8px; color: var(--accent-ink);
+                      font-weight: 700; cursor: pointer; font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LNK Mini · Dev Dashboard</h1>
+  <nav class="tabs">
+    <span class="tab active" data-view="map">Map</span>
+    <span class="tab" data-view="players">Players</span>
+    <span class="tab" data-view="npcs">NPCs</span>
+    <span class="tab" data-view="items">Items</span>
+  </nav>
+  <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
+  <span id="status">connecting…</span>
+  <button id="cfgbtn" title="Bot API address & token">⚙</button>
+</header>
+
+<main>
+<section class="view active" id="view-map">
+  <div id="mapwrap">
+    <div id="zoomer">
+      <img id="underlay" src="/dash/underlay" alt="Motu Lani">
+      <div id="overlay"></div>
+    </div>
+  </div>
+  <aside>
+    <div class="card">
+      <h2>Teams</h2>
+      <div id="teams"></div>
+      <p class="hint" style="margin-top:8px">One dot = one team; drag it to
+      move the whole team (hover to see who's in it). Grey dots are team-less
+      players. Hollow markers are villages the players haven't found yet.</p>
+    </div>
+    <div class="card" id="placecard" style="display:none">
+      <h2 id="placename"></h2>
+      <div class="hint" id="placedesc"></div>
+      <div class="who" id="placewho"></div>
+    </div>
+    <div class="card" id="benchcard" style="display:none">
+      <h2>Off the map</h2>
+      <div id="bench"></div>
+      <p class="hint">No GPS position — drag onto the map to place.</p>
+    </div>
+  </aside>
+</section>
+
+<section class="view" id="view-players">
+  <div class="listpane card">
+    <input class="search" id="psearch" type="text" placeholder="Search players…">
+    <button class="btn mini" id="pnew">＋ New player</button>
+    <div id="plist" style="margin-top:8px"></div>
+  </div>
+  <div class="editor card" id="pedit"><p class="muted">Select a player.</p></div>
+</section>
+
+<section class="view" id="view-npcs">
+  <div class="listpane card">
+    <input class="search" id="nsearch" type="text" placeholder="Search NPCs…">
+    <button class="btn mini" id="nnew">＋ New NPC</button>
+    <button class="btn mini" id="nallon" title="Auto-reply ON for every NPC">⚡ all auto</button>
+    <button class="btn mini" id="nalloff" title="Auto-reply OFF for every NPC">✋ all manual</button>
+    <div id="nlist" style="margin-top:8px"></div>
+  </div>
+  <div class="editor card" id="nedit"><p class="muted">Select an NPC.</p></div>
+</section>
+
+<section class="view" id="view-items">
+  <div class="listpane card">
+    <input class="search" id="isearch" type="text" placeholder="Search items…">
+    <button class="btn mini" id="inew">＋ New item</button>
+    <div id="ilist" style="margin-top:8px"></div>
+  </div>
+  <div class="editor card" id="iedit"><p class="muted">Select an item.</p></div>
+</section>
+</main>
+
+<div id="toast"></div>
+<div id="tokengate" style="display:none">
+  <div class="card">
+    <h2>Connect to the bot</h2>
+    <p class="hint">Bot API address — leave as-is when the bot runs on this
+    machine; after the server move, put its https address here.</p>
+    <input id="apiin" type="text" placeholder="http://127.0.0.1:8787" style="width:100%;margin:8px 0 2px">
+    <p class="hint" style="margin-top:8px">Token — the HT_API_TOKEN from the
+    bot's .env. Both are kept in this browser.</p>
+    <input id="tokenin" type="password" placeholder="token">
+    <button onclick="saveToken()">Unlock</button>
+  </div>
+</div>
+
+<script>
+const PALETTE = ["#2e8b57","#e07b39","#7b4fa6","#2a8fa3","#3b6bd6","#c14953",
+                 "#b28c2e","#6b8e23"];
+let TOKEN = localStorage.getItem("ht_token") || "";
+// API base: empty = same origin (the page is served by the bot itself).
+// The copy hosted on the lore site defaults to the local bot address —
+// loopback is exempt from mixed-content rules in Chrome, so the https page
+// can talk to http://127.0.0.1:8787 on the bot machine.
+const SERVED_BY_BOT = location.port === "8787";
+let API = localStorage.getItem("ht_api_base") ||
+          (SERVED_BY_BOT ? "" : "http://127.0.0.1:8787");
+let state = null;          // last /api/map payload
+let teamColor = {};        // gid -> color
+let armedTeam = null;      // gid armed for whole-team move
+let drag = null;           // any in-progress drag blocks map repaints
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => Number(n || 0).toLocaleString();
+const overlay = $("#overlay"), wrap = $("#mapwrap"), img = $("#underlay"),
+      zoomer = $("#zoomer");
+
+/* ---------- pan & zoom ---------- */
+let view = { k: 1, tx: 0, ty: 0 };
+function applyView() {
+  const r = wrap.getBoundingClientRect();
+  view.k = Math.min(Math.max(view.k, 1), 8);
+  view.tx = Math.min(0, Math.max(view.tx, r.width * (1 - view.k)));
+  view.ty = Math.min(0, Math.max(view.ty, r.height * (1 - view.k)));
+  zoomer.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`;
+  zoomer.style.setProperty("--inv", 1 / view.k);
+}
+wrap.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const k0 = view.k;
+  view.k = Math.min(Math.max(view.k * Math.exp(-e.deltaY * 0.0016), 1), 8);
+  view.tx = mx - (mx - view.tx) * (view.k / k0);
+  view.ty = my - (my - view.ty) * (view.k / k0);
+  applyView();
+}, { passive: false });
+let pan = null;
+wrap.addEventListener("pointerdown", e => {
+  if (e.target !== img) return;
+  pan = { x: e.clientX, y: e.clientY };
+});
+wrap.addEventListener("pointermove", e => {
+  if (!pan) return;
+  view.tx += e.clientX - pan.x;
+  view.ty += e.clientY - pan.y;
+  pan = { x: e.clientX, y: e.clientY };
+  applyView();
+});
+wrap.addEventListener("pointerup", () => pan = null);
+wrap.addEventListener("pointerleave", () => pan = null);
+wrap.addEventListener("dblclick", e => {
+  if (e.target !== img) return;
+  view = { k: 1, tx: 0, ty: 0 };
+  applyView();
+});
+
+function toast(msg, err) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = err ? "err" : "";
+  t.style.opacity = 1;
+  setTimeout(() => t.style.opacity = 0, 2600);
+}
+function saveToken() {
+  TOKEN = $("#tokenin").value.trim();
+  API = $("#apiin").value.trim().replace(/\/+$/, "");
+  if (SERVED_BY_BOT && (API === location.origin || API === "")) API = "";
+  localStorage.setItem("ht_token", TOKEN);
+  localStorage.setItem("ht_api_base", API);
+  $("#tokengate").style.display = "none";
+  img.src = API + "/dash/underlay";
+  refresh();
+  switchView(Views.current);
+}
+function openGate() {
+  $("#apiin").value = API || (SERVED_BY_BOT ? "" : "http://127.0.0.1:8787");
+  $("#tokenin").value = TOKEN;
+  $("#tokengate").style.display = "flex";
+}
+async function api(path, body) {
+  const r = await fetch(API + path, {
+    method: body ? "POST" : "GET",
+    headers: { "Authorization": "Bearer " + TOKEN,
+               ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401) {
+    localStorage.removeItem("ht_token");
+    openGate();
+    throw new Error("unauthorized");
+  }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+/* ---------- view switching ---------- */
+const Views = { current: "map" };
+document.querySelectorAll(".tab[data-view]").forEach(t =>
+  t.onclick = () => switchView(t.dataset.view));
+function switchView(v) {
+  Views.current = v;
+  document.querySelectorAll(".tab[data-view]").forEach(t =>
+    t.classList.toggle("active", t.dataset.view === v));
+  document.querySelectorAll(".view").forEach(s =>
+    s.classList.toggle("active", s.id === "view-" + v));
+  $("#arrangebtn").style.display = v === "map" ? "" : "none";
+  if (v === "players") Players.load();
+  if (v === "npcs") Npcs.load();
+  if (v === "items") Items.load();
+}
+
+/* ================= MAP ================= */
+function pct(v, axis) {
+  const c = state.canvas;
+  return (v / (axis === "x" ? c.w : c.h) * 100) + "%";
+}
+function render() {
+  overlay.innerHTML = "";
+  teamColor = {};
+  Object.keys(state.teams).forEach((gid, i) => teamColor[gid] = PALETTE[i % PALETTE.length]);
+  for (const [key, p] of Object.entries(state.places)) {
+    const el = document.createElement("div");
+    el.className = "place" + (p.new ? " new" : "");
+    el.dataset.key = key;
+    el.style.left = pct(p.x, "x");
+    el.style.top = pct(p.y, "y");
+    el.innerHTML = `<div class="lbl">${esc(p.name)}</div><div class="dot"></div>`;
+    if (arrange) {
+      el.querySelector(".dot").onpointerdown = e => startPlaceDrag(e, key, el);
+    } else {
+      el.onclick = () => placeClicked(key);
+    }
+    overlay.appendChild(el);
+  }
+  const byPlace = {};
+  for (const pl of state.players) {
+    if (!pl.place || !state.places[pl.place]) continue;
+    const gkey = pl.team ? pl.team : "solo:" + pl.id;
+    const bucket = (byPlace[pl.place] = byPlace[pl.place] || {});
+    (bucket[gkey] = bucket[gkey] || []).push(pl);
+  }
+  for (const [key, groups] of Object.entries(byPlace)) {
+    const p = state.places[key];
+    Object.entries(groups).sort().forEach(([gkey, members], i) => {
+      const el = document.createElement("div");
+      const solo = gkey.startsWith("solo:");
+      const traveling = members.every(m => m.traveling);
+      el.className = "pawn" + (traveling ? " traveling" : "");
+      const col = solo ? "#8b93a2" : (teamColor[gkey] || "#666");
+      el.style.background = col;
+      el.style.color = col;
+      el.style.left = pct(p.x - 30 + (i % 4) * 22, "x");
+      el.style.top = pct(p.y + 22 + Math.floor(i / 4) * 20, "y");
+      const label = solo ? members[0].name : (state.teams[gkey] || "team");
+      el.title = `${label} — ${p.name}\n` +
+                 members.map(m => m.name + (m.traveling ? " ✈" : "")).join(", ");
+      el.onpointerdown = e => startDrag(
+        e, solo ? { player_id: members[0].id } : { team: gkey }, el, label);
+      overlay.appendChild(el);
+    });
+  }
+  const teams = $("#teams");
+  teams.innerHTML = "";
+  for (const [gid, name] of Object.entries(state.teams)) {
+    const n = state.players.filter(p => p.team === gid).length;
+    const row = document.createElement("div");
+    row.className = "teamrow" + (armedTeam === gid ? " armed" : "");
+    row.innerHTML = `<span class="swatch" style="background:${teamColor[gid]}"></span>
+                     ${esc(name)} <span class="n">${n}</span>`;
+    row.onclick = () => {
+      armedTeam = armedTeam === gid ? null : gid;
+      render();
+      if (armedTeam) toast(`Click a place to move all of ${name}`);
+    };
+    teams.appendChild(row);
+  }
+  const benched = state.players.filter(p => !p.place);
+  $("#benchcard").style.display = benched.length ? "" : "none";
+  const bench = $("#bench");
+  bench.innerHTML = "";
+  for (const pl of benched) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `<span class="swatch" style="background:${teamColor[pl.team] || "#666"}"></span>${esc(pl.name)}`;
+    chip.onpointerdown = e => startDrag(e, { player_id: pl.id }, chip, pl.name);
+    bench.appendChild(chip);
+  }
+}
+function placeClicked(key) {
+  const p = state.places[key];
+  if (armedTeam) {
+    const name = state.teams[armedTeam];
+    if (confirm(`Move ALL of ${name} to ${p.name}?`)) {
+      api("/api/map/move", { team: armedTeam, place: key })
+        .then(r => { toast(`Moved ${r.moved} player(s) to ${p.name}`); refresh(); })
+        .catch(e => toast(e.message, true));
+    }
+    armedTeam = null;
+    render();
+    return;
+  }
+  $("#placecard").style.display = "";
+  $("#placename").textContent = p.name + (p.new ? " · undiscovered" : "");
+  $("#placedesc").textContent = p.desc +
+    (p.new ? `  (found by: ${(p.discovered_by || []).join(", ") || "no one yet"})` : "");
+  const here = state.players.filter(pl => pl.place === key);
+  $("#placewho").innerHTML = here.length
+    ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${pl.traveling ? " ✈" : ""}</div>`).join("")
+    : "<div class='hint'>nobody here</div>";
+}
+function canvasXY(e) {
+  const r = img.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * state.canvas.w,
+           y: (e.clientY - r.top) / r.height * state.canvas.h };
+}
+function nearestPlace(xy, maxDist) {
+  let best = null, bd = maxDist * maxDist;
+  for (const [key, p] of Object.entries(state.places)) {
+    const d = (p.x - xy.x) ** 2 + (p.y - xy.y) ** 2;
+    if (d < bd) { bd = d; best = key; }
+  }
+  return best;
+}
+function startDrag(e, target, el, label) {
+  e.preventDefault();
+  drag = { target, el };
+  el.classList.add("dragging");
+  el.setPointerCapture(e.pointerId);
+  el.onpointermove = ev => {
+    const xy = canvasXY(ev);
+    if (el.classList.contains("pawn")) {
+      el.style.left = pct(xy.x, "x");
+      el.style.top = pct(xy.y, "y");
+    }
+    const near = nearestPlace(xy, 55);
+    document.querySelectorAll(".place").forEach(pe =>
+      pe.classList.toggle("droptarget", pe.dataset.key === near));
+  };
+  el.onpointerup = ev => {
+    el.classList.remove("dragging");
+    el.onpointermove = el.onpointerup = null;
+    document.querySelectorAll(".place").forEach(pe => pe.classList.remove("droptarget"));
+    const near = nearestPlace(canvasXY(ev), 55);
+    drag = null;
+    if (!near) { render(); return; }
+    api("/api/map/move", { ...target, place: near })
+      .then(r => { toast(`${label} → ${state.places[near].name}` +
+                         (r.moved > 1 ? ` (${r.moved} players)` : "")); refresh(); })
+      .catch(err => { toast(err.message, true); render(); });
+  };
+}
+let arrange = false;
+$("#arrangebtn").onclick = () => {
+  arrange = !arrange;
+  $("#arrangebtn").classList.toggle("on", arrange);
+  document.body.classList.toggle("arrange", arrange);
+  if (state) render();
+  toast(arrange ? "Arrange mode — drag place markers; each drop saves"
+                : "Arrange mode off");
+};
+function startPlaceDrag(e, key, el) {
+  e.preventDefault();
+  e.stopPropagation();
+  drag = { key, el };
+  const dot = el.querySelector(".dot");
+  dot.setPointerCapture(e.pointerId);
+  let xy = null;
+  dot.onpointermove = ev => {
+    xy = canvasXY(ev);
+    el.style.left = pct(xy.x, "x");
+    el.style.top = pct(xy.y, "y");
+  };
+  dot.onpointerup = () => {
+    dot.onpointermove = dot.onpointerup = null;
+    drag = null;
+    if (!xy) return;
+    const x = Math.round(Math.min(Math.max(xy.x, 0), state.canvas.w));
+    const y = Math.round(Math.min(Math.max(xy.y, 0), state.canvas.h));
+    api("/api/map/place-coord", { place: key, x, y })
+      .then(() => { toast(`${state.places[key].name} repositioned`); refresh(); })
+      .catch(err => { toast(err.message, true); render(); });
+  };
+}
+async function refresh() {
+  if (drag || Views.current !== "map") return;
+  try {
+    state = await api("/api/map");
+    wrap.style.aspectRatio = `${state.canvas.w} / ${state.canvas.h}`;
+    render();
+    $("#status").textContent = "live · " + new Date().toLocaleTimeString();
+    $("#status").classList.add("live");
+  } catch (e) {
+    if (e.message !== "unauthorized") {
+      $("#status").textContent = "offline — is the bot running?";
+      $("#status").classList.remove("live");
+    }
+  }
+}
+
+/* ================= PLAYERS ================= */
+const Players = {
+  data: null, sel: null, selTeam: null, creating: false,
+  async load() {
+    try { this.data = await api("/api/dash/players"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  teamColorAt(gid) {
+    const i = Object.keys(this.data.teams).indexOf(gid);
+    return i < 0 ? "#666" : PALETTE[i % PALETTE.length];
+  },
+  renderList() {
+    const q = $("#psearch").value.trim().toLowerCase();
+    const box = $("#plist");
+    box.innerHTML = "";
+    const groups = {};
+    for (const p of this.data.players) {
+      (groups[p.team || ""] = groups[p.team || ""] || []).push(p);
+    }
+    const addPlayerRow = p => {
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === p.id ? " sel" : "");
+      row.style.paddingLeft = "18px";
+      row.innerHTML = `<span>${esc(p.name)}</span>
+        <span class="sub">$${fmt(p.wallet)}${p.inventory.length
+          ? " · " + p.inventory.length + " it." : ""}</span>`;
+      row.onclick = () => { this.sel = p.id; this.selTeam = null;
+                            this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    };
+    for (const [gid, tname] of Object.entries(this.data.teams)) {
+      const members = (groups[gid] || [])
+        .filter(p => !q || p.name.toLowerCase().includes(q));
+      if (q && !members.length && !tname.toLowerCase().includes(q)) continue;
+      const econ = (this.data.team_econ || {})[gid] || { treasury: 0, stash: [] };
+      const hdr = document.createElement("div");
+      hdr.className = "lrow" + (this.selTeam === gid ? " sel" : "");
+      hdr.style.fontWeight = "600";
+      hdr.innerHTML = `<span class="swatch" style="background:${this.teamColorAt(gid)}"></span>
+        <span>${esc(tname)}</span>
+        <span class="sub">$${fmt(econ.treasury)} · stash ${econ.stash.length}</span>`;
+      hdr.onclick = () => { this.selTeam = gid; this.sel = null;
+                            this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(hdr);
+      members.forEach(addPlayerRow);
+    }
+    const loose = (groups[""] || [])
+      .filter(p => !q || p.name.toLowerCase().includes(q));
+    if (loose.length) {
+      const hdr = document.createElement("div");
+      hdr.className = "muted";
+      hdr.style.cssText = "margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.6px";
+      hdr.textContent = "No team";
+      box.appendChild(hdr);
+      loose.forEach(addPlayerRow);
+    }
+  },
+  player() { return this.data.players.find(p => p.id === this.sel); },
+  renderEditor() {
+    const box = $("#pedit");
+    if (this.creating) { this.renderCreate(box); return; }
+    if (this.selTeam) { this.renderTeam(box); return; }
+    const p = this.player();
+    if (!p) { box.innerHTML = "<p class='muted'>Select a player or a team header.</p>"; return; }
+    const teamOpts = ['<option value="">— none (dev / teamless) —</option>']
+      .concat(Object.entries(this.data.teams).map(([g, n]) =>
+        `<option value="${g}" ${p.team === g ? "selected" : ""}>${esc(n)}</option>`));
+    box.innerHTML = `
+      <h2>${esc(p.name)} <span class="muted">· ${esc(p.id)}</span></h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Name</label><input type="text" id="pf-name" value="${esc(p.name)}"></div>
+          <div><label>Pronouns</label><input type="text" id="pf-pronouns" value="${esc(p.pronouns)}"></div>
+          <div><label>Label (e.g. Developer)</label><input type="text" id="pf-label"
+               value="${esc(p.label === "Player" ? "" : p.label)}" placeholder="Player"></div>
+          <div><label>Affiliation (blank = team name)</label>
+               <input type="text" id="pf-aff" value="${esc(p.affiliation || "")}"></div>
+          <div><label>Team</label><select id="pf-team">${teamOpts.join("")}</select></div>
+          <div><label>Card color (#RRGGBB, blank = green)</label>
+               <input type="text" id="pf-color" value="${esc(p.color || "")}"></div>
+          <div><label>HP bonus</label><input type="number" id="pf-hp" value="${p.hp_bonus}"></div>
+          <div><label style="margin-top:14px"><input type="checkbox" id="pf-hollow"
+               ${p.hollow ? "checked" : ""}> Hollow side</label></div>
+        </div>
+        <label>Gif (URL or local:file)</label>
+        <input type="text" id="pf-gif" value="${esc(p.gif)}">
+        <label>Titles (one per line)</label>
+        <textarea id="pf-titles" rows="3">${esc((p.titles || []).join("\n"))}</textarea>
+        <div class="btnrow">
+          <button class="btn primary" id="pf-save">Save profile</button>
+          <button class="btn danger" id="pf-del">Unregister…</button>
+        </div>
+        <hr>
+        <h2>Wallet — $${fmt(p.wallet)}</h2>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="number" id="pf-delta" placeholder="± amount" style="width:140px">
+          <button class="btn" id="pf-give">Give</button>
+          <button class="btn" id="pf-take">Take</button>
+          <input type="number" id="pf-setw" placeholder="set exact" style="width:140px">
+          <button class="btn" id="pf-setwb">Set</button>
+        </div>
+        <hr>
+        <h2>Inventory</h2>
+        <div id="pf-inv"></div>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="text" id="pf-additem" placeholder="item name" style="flex:1">
+          <input type="number" id="pf-addqty" value="1" style="width:70px">
+          <button class="btn" id="pf-addbtn">Add</button>
+        </div>
+      </div>`;
+    const inv = $("#pf-inv");
+    inv.innerHTML = p.inventory.length ? "" : "<p class='muted'>empty</p>";
+    // Stash target: the player's own team, or (for team-less players — e.g.
+    // someone just moved to spectator) a picker over all teams.
+    const stashTeam = () => p.team || ($("#pf-stashteam") && $("#pf-stashteam").value);
+    for (const it of p.inventory) {
+      const row = document.createElement("div");
+      row.className = "invrow";
+      row.innerHTML = `<span class="nm" title="${esc(it.desc)}">${esc(it.name)}</span>
+        <span class="muted">×${it.qty}</span>
+        <button class="btn mini" data-d="1">+</button>
+        <button class="btn mini" data-d="-1">−</button>
+        <button class="btn mini" data-d="stash" title="Move this stack to the team stash">→ stash</button>
+        <button class="btn mini danger" data-d="zap">✕</button>`;
+      row.querySelectorAll("button").forEach(b => b.onclick = () => {
+        if (b.dataset.d === "stash") {
+          api("/api/dash/move-to-stash",
+              { player_id: p.id, item: it.name, team: stashTeam() })
+            .then(r => { toast(`Stashed ${r.moved.join(", ")}`); Players.load(); })
+            .catch(e => toast(e.message, true));
+          return;
+        }
+        const payload = b.dataset.d === "zap"
+          ? { user_id: p.id, item: it.name, set: 0 }
+          : { user_id: p.id, item: it.name, delta: Number(b.dataset.d) };
+        api("/api/inventory", payload)
+          .then(() => Players.load()).catch(e => toast(e.message, true));
+      });
+      inv.appendChild(row);
+    }
+    if (p.inventory.length) {
+      const all = document.createElement("div");
+      all.className = "btnrow";
+      const picker = p.team ? "" :
+        `<select id="pf-stashteam">${Object.entries(this.data.teams).map(([g, n]) =>
+           `<option value="${g}">${esc(n)}</option>`).join("")}</select>`;
+      all.innerHTML = `${picker}
+        <button class="btn" id="pf-stashall">Move ALL items → team stash</button>
+        <span class="hint">the retiring-player flow: stash the kit, then unregister</span>`;
+      inv.appendChild(all);
+      all.querySelector("#pf-stashall").onclick = () => {
+        const gid = stashTeam();
+        if (!gid) return;
+        if (!confirm(`Move everything ${p.name} holds into the ` +
+                     `${this.data.teams[gid]} stash?`))
+          return;
+        api("/api/dash/move-to-stash", { player_id: p.id, team: gid })
+          .then(r => { toast(`Stashed ${r.moved.length} stack(s)`); Players.load(); })
+          .catch(e => toast(e.message, true));
+      };
+    }
+    $("#pf-addbtn").onclick = () => {
+      const item = $("#pf-additem").value.trim();
+      const qty = parseInt($("#pf-addqty").value || "1", 10);
+      if (!item) return;
+      api("/api/inventory", { user_id: p.id, item, delta: qty })
+        .then(() => Players.load()).catch(e => toast(e.message, true));
+    };
+    $("#pf-save").onclick = () => {
+      const body = {
+        id: p.id,
+        name: $("#pf-name").value,
+        pronouns: $("#pf-pronouns").value,
+        label: $("#pf-label").value || null,
+        affiliation: $("#pf-aff").value || null,
+        team: $("#pf-team").value || null,
+        color: $("#pf-color").value || null,
+        gif: $("#pf-gif").value,
+        hp_bonus: parseInt($("#pf-hp").value || "0", 10),
+        hollow: $("#pf-hollow").checked,
+        titles: $("#pf-titles").value.split("\n").map(s => s.trim()).filter(Boolean),
+      };
+      api("/api/dash/player", body)
+        .then(r => { toast(r.changed.length ? "Saved: " + r.changed.join(", ")
+                                            : "No changes"); Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#pf-give").onclick = () => Players.wallet(p, Math.abs(parseInt($("#pf-delta").value || "0", 10)));
+    $("#pf-take").onclick = () => Players.wallet(p, -Math.abs(parseInt($("#pf-delta").value || "0", 10)));
+    $("#pf-setwb").onclick = () => {
+      const v = $("#pf-setw").value;
+      if (v === "") return;
+      api("/api/dash/player", { id: p.id, wallet_set: parseInt(v, 10) })
+        .then(() => { toast("Wallet set"); Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#pf-del").onclick = () => {
+      if (!confirm(`Unregister ${p.name}? Their wallet/inventory records stay ` +
+                   "(same as /unregister), but the player card is gone."))
+        return;
+      api("/api/dash/player-delete", { id: p.id })
+        .then(() => { toast(`${p.name} unregistered`); Players.sel = null; Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+  },
+  wallet(p, delta) {
+    if (!delta) return;
+    api("/api/dash/player", { id: p.id, wallet_delta: delta })
+      .then(() => { toast(`Wallet ${delta > 0 ? "+" : ""}${fmt(delta)}`); Players.load(); })
+      .catch(e => toast(e.message, true));
+  },
+  renderTeam(box) {
+    const gid = this.selTeam;
+    const tname = this.data.teams[gid];
+    const econ = (this.data.team_econ || {})[gid] || { treasury: 0, stash: [] };
+    const members = this.data.players.filter(p => p.team === gid);
+    box.innerHTML = `
+      <h2><span class="swatch" style="display:inline-block;background:${this.teamColorAt(gid)}"></span>
+        ${esc(tname)} <span class="muted">· ${members.length} member(s) · ${esc(gid)}</span></h2>
+      <div class="frm">
+        <h2 style="margin-top:12px">Team Bank — $${fmt(econ.treasury)}</h2>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="number" id="tf-delta" placeholder="± amount" style="width:150px">
+          <button class="btn" id="tf-give">Deposit</button>
+          <button class="btn" id="tf-take">Withdraw</button>
+          <input type="number" id="tf-set" placeholder="set exact" style="width:150px">
+          <button class="btn" id="tf-setb">Set</button>
+        </div>
+        <hr>
+        <h2>Team stash <span class="muted">(what /transfer fills and /claim empties)</span></h2>
+        <div id="tf-stash"></div>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="text" id="tf-additem" placeholder="item name" style="flex:1">
+          <input type="number" id="tf-addqty" value="1" style="width:70px">
+          <button class="btn" id="tf-addbtn">Add</button>
+        </div>
+        <hr>
+        <p class="hint">Members: ${members.map(m => esc(m.name)).join(", ") || "none"}.
+        Wallets and personal inventories are edited on each player; this screen
+        is the shared money and the shared shelf.</p>
+      </div>`;
+    const stash = $("#tf-stash");
+    stash.innerHTML = econ.stash.length ? "" : "<p class='muted'>empty</p>";
+    for (const it of econ.stash) {
+      const row = document.createElement("div");
+      row.className = "invrow";
+      row.innerHTML = `<span class="nm" title="${esc(it.desc)}">${esc(it.name)}</span>
+        <span class="muted">×${it.qty}</span>
+        <button class="btn mini" data-d="1">+</button>
+        <button class="btn mini" data-d="-1">−</button>
+        <button class="btn mini danger" data-d="zap">✕</button>`;
+      row.querySelectorAll("button").forEach(b => b.onclick = () => {
+        const payload = b.dataset.d === "zap"
+          ? { team: gid, item: it.name, set: 0 }
+          : { team: gid, item: it.name, delta: Number(b.dataset.d) };
+        api("/api/dash/stash", payload)
+          .then(() => Players.load()).catch(e => toast(e.message, true));
+      });
+      stash.appendChild(row);
+    }
+    $("#tf-addbtn").onclick = () => {
+      const item = $("#tf-additem").value.trim();
+      const qty = parseInt($("#tf-addqty").value || "1", 10);
+      if (!item) return;
+      api("/api/dash/stash", { team: gid, item, delta: qty })
+        .then(() => Players.load()).catch(e => toast(e.message, true));
+    };
+    const tre = delta => {
+      if (!delta) return;
+      api("/api/dash/team", { team: gid, treasury_delta: delta })
+        .then(() => { toast(`Team Bank ${delta > 0 ? "+" : ""}${fmt(delta)}`);
+                      Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#tf-give").onclick = () => tre(Math.abs(parseInt($("#tf-delta").value || "0", 10)));
+    $("#tf-take").onclick = () => tre(-Math.abs(parseInt($("#tf-delta").value || "0", 10)));
+    $("#tf-setb").onclick = () => {
+      const v = $("#tf-set").value;
+      if (v === "") return;
+      api("/api/dash/team", { team: gid, treasury_set: parseInt(v, 10) })
+        .then(() => { toast("Team Bank set"); Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+  },
+  renderCreate(box) {
+    box.innerHTML = `
+      <h2>New player</h2>
+      <p class="hint">Mirrors /register-player — the member's Discord ID plus
+      card basics. They can be placed on the map afterwards.</p>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Discord user ID</label><input type="text" id="pc-id"></div>
+          <div><label>Name</label><input type="text" id="pc-name"></div>
+          <div><label>Pronouns</label><input type="text" id="pc-pronouns"></div>
+          <div><label>Team</label><select id="pc-team">
+            <option value="">— none —</option>
+            ${Object.entries(this.data.teams).map(([g, n]) =>
+              `<option value="${g}">${esc(n)}</option>`).join("")}
+          </select></div>
+        </div>
+        <label>Gif URL</label><input type="text" id="pc-gif">
+        <div class="btnrow">
+          <button class="btn primary" id="pc-create">Register</button>
+          <button class="btn" id="pc-cancel">Cancel</button>
+        </div>
+      </div>`;
+    $("#pc-create").onclick = () => {
+      api("/api/dash/player-create", {
+        discord_id: $("#pc-id").value.trim(),
+        name: $("#pc-name").value,
+        pronouns: $("#pc-pronouns").value,
+        gif: $("#pc-gif").value,
+        team: $("#pc-team").value || null,
+      }).then(r => { toast("Registered"); this.creating = false;
+                     this.sel = r.id; this.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#pc-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+  },
+};
+$("#psearch").oninput = () => Players.renderList();
+$("#pnew").onclick = () => { Players.creating = true; Players.renderEditor(); };
+
+/* ================= NPCS ================= */
+const Npcs = {
+  data: null, sel: null, creating: false,
+  async load() {
+    try { this.data = await api("/api/dash/npcs"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  renderList() {
+    const q = $("#nsearch").value.trim().toLowerCase();
+    const box = $("#nlist");
+    box.innerHTML = "";
+    for (const n of this.data.npcs) {
+      if (q && !n.name.toLowerCase().includes(q) && !n.key.includes(q)) continue;
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === n.key ? " sel" : "");
+      row.innerHTML = `<span>${esc(n.name)}</span>
+        <span class="sub">
+          ${n.dead ? '<span class="badge dead">dead</span>' : ""}
+          <span class="badge ${n.auto ? "on" : "off"}">${n.auto ? "auto" : "manual"}</span>
+        </span>`;
+      row.onclick = () => { this.sel = n.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+  },
+  npc() { return this.data.npcs.find(n => n.key === this.sel); },
+  renderEditor() {
+    const box = $("#nedit");
+    if (this.creating) { this.renderCreate(box); return; }
+    const n = this.npc();
+    if (!n) { box.innerHTML = "<p class='muted'>Select an NPC.</p>"; return; }
+    const c = n.combat || {};
+    box.innerHTML = `
+      <h2>${esc(n.name)} <span class="muted">· ${esc(n.key)}</span></h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Display name</label><input type="text" id="nf-name" value="${esc(n.name)}"></div>
+          <div><label>Affiliation</label><input type="text" id="nf-aff" value="${esc(n.affiliation || "")}"></div>
+          <div><label style="margin-top:14px"><input type="checkbox" id="nf-auto"
+               ${n.auto ? "checked" : ""}> Auto-reply (Ollama)</label></div>
+          <div><label style="margin-top:14px"><input type="checkbox" id="nf-dead"
+               ${n.dead ? "checked" : ""}> Dead (permadeath)</label></div>
+        </div>
+        <label>Titles (one per line)</label>
+        <textarea id="nf-titles" rows="2">${esc((n.titles || []).join("\n"))}</textarea>
+        <label>Portrait gif URL ${n.local_image ? `<span class="muted">(currently local file: ${esc(n.local_image)} — a URL here overrides it)</span>` : ""}</label>
+        <input type="text" id="nf-gif" value="${esc(n.gif)}">
+        <label>Scene note (steers every reply until cleared — /npc note)</label>
+        <textarea id="nf-notes" rows="2">${esc(n.notes)}</textarea>
+        <hr>
+        <h2>Combat card</h2>
+        <div class="grid2">
+          <div><label>Tier</label><input type="text" id="nf-tier" value="${esc(c.tier || "")}"
+               placeholder="civilian / fighter / boss…"></div>
+          <div><label>HP</label><input type="number" id="nf-hp" value="${c.hp ?? ""}"></div>
+        </div>
+        <label>Threat (how they fight)</label>
+        <textarea id="nf-threat" rows="3">${esc(c.threat || "")}</textarea>
+        <label>Kill notes (what their death costs)</label>
+        <textarea id="nf-kill" rows="3">${esc(c.kill_notes || "")}</textarea>
+        <hr>
+        <h2>Personality profile <span class="muted">(npc_profiles/${esc(n.key)}.md — the Ollama character sheet)</span></h2>
+        <textarea id="nf-profile" rows="18" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">${esc(n.profile)}</textarea>
+        <div class="btnrow">
+          <button class="btn primary" id="nf-save">Save NPC</button>
+          <button class="btn danger" id="nf-del">Delete…</button>
+        </div>
+        <hr>
+        <h2>Durable memories (${n.memories.length})</h2>
+        <div id="nf-mems"></div>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="text" id="nf-addmem" placeholder="First person, e.g. 'PK kept the lantern lit'" style="flex:1">
+          <button class="btn" id="nf-membtn">Remember</button>
+        </div>
+      </div>`;
+    const mems = $("#nf-mems");
+    mems.innerHTML = n.memories.length ? "" : "<p class='muted'>none</p>";
+    n.memories.forEach((m, i) => {
+      const row = document.createElement("div");
+      row.className = "memrow";
+      row.innerHTML = `<span class="t">${esc(m.text)}
+          <span class="muted">(${esc(m.when || "")}${m.scene ? " · " + esc(m.scene) : ""})</span></span>
+        <button class="btn mini danger">forget</button>`;
+      row.querySelector("button").onclick = () =>
+        api("/api/dash/npc-memory", { key: n.key, forget: i })
+          .then(() => Npcs.load()).catch(e => toast(e.message, true));
+      mems.appendChild(row);
+    });
+    $("#nf-membtn").onclick = () => {
+      const text = $("#nf-addmem").value.trim();
+      if (!text) return;
+      api("/api/dash/npc-memory", { key: n.key, add: text })
+        .then(() => Npcs.load()).catch(e => toast(e.message, true));
+    };
+    $("#nf-save").onclick = () => {
+      api("/api/dash/npc", {
+        key: n.key,
+        name: $("#nf-name").value,
+        affiliation: $("#nf-aff").value || null,
+        auto: $("#nf-auto").checked,
+        dead: $("#nf-dead").checked,
+        titles: $("#nf-titles").value.split("\n").map(s => s.trim()).filter(Boolean),
+        gif: $("#nf-gif").value,
+        notes: $("#nf-notes").value,
+        combat: {
+          tier: $("#nf-tier").value,
+          hp: $("#nf-hp").value === "" ? null : parseInt($("#nf-hp").value, 10),
+          threat: $("#nf-threat").value,
+          kill_notes: $("#nf-kill").value,
+        },
+        profile: $("#nf-profile").value,
+      }).then(r => { toast(r.changed.length ? "Saved: " + r.changed.join(", ")
+                                            : "No changes"); Npcs.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#nf-del").onclick = () => {
+      if (!confirm(`Delete NPC ${n.name}? Record, memories, stall, and cast ` +
+                   "rows go; the profile file stays on disk as a backup."))
+        return;
+      api("/api/dash/npc-delete", { key: n.key })
+        .then(() => { toast(`${n.name} deleted`); Npcs.sel = null; Npcs.load(); })
+        .catch(e => toast(e.message, true));
+    };
+  },
+  renderCreate(box) {
+    box.innerHTML = `
+      <h2>New NPC</h2>
+      <p class="hint">The name doubles as the key and profile filename —
+      letters, at most 80 chars, no <code>: . / \\</code>. Everything else can
+      be filled in after creation.</p>
+      <div class="frm">
+        <label>Name</label><input type="text" id="nc-name">
+        <label>Personality profile (optional to start)</label>
+        <textarea id="nc-profile" rows="8" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px"></textarea>
+        <div class="btnrow">
+          <button class="btn primary" id="nc-create">Create</button>
+          <button class="btn" id="nc-cancel">Cancel</button>
+        </div>
+      </div>`;
+    $("#nc-create").onclick = () => {
+      api("/api/dash/npc", { name: $("#nc-name").value,
+                             profile: $("#nc-profile").value })
+        .then(r => { toast("Created"); this.creating = false;
+                     this.sel = r.key; this.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    $("#nc-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+  },
+};
+$("#nsearch").oninput = () => Npcs.renderList();
+$("#nnew").onclick = () => { Npcs.creating = true; Npcs.renderEditor(); };
+const npcBulk = val => {
+  if (!confirm(`Turn auto-reply ${val ? "ON" : "OFF"} for EVERY NPC?`)) return;
+  api("/api/dash/npc-bulk", { auto: val })
+    .then(r => { toast(`${r.changed} NPC(s) changed`); Npcs.load(); })
+    .catch(e => toast(e.message, true));
+};
+$("#nallon").onclick = () => npcBulk(true);
+$("#nalloff").onclick = () => npcBulk(false);
+
+/* ================= ITEMS ================= */
+const Items = {
+  data: null, sel: null, creating: false,
+  async load() {
+    try { this.data = await api("/api/dash/items"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  effectSummary(e) {
+    if (!e) return "flavor";
+    let s = e.kind;
+    if (e.amount != null) s += ` ${e.amount}${e.max ? "–" + e.max : ""}`;
+    if (e.status) s += ` “${e.status}”`;
+    if (e.dot) s += ` ${e.dot}/tick`;
+    return s;
+  },
+  renderList() {
+    const q = $("#isearch").value.trim().toLowerCase();
+    const box = $("#ilist");
+    box.innerHTML = "";
+    let lastCat = null;
+    for (const it of this.data.items) {
+      if (q && !it.name.toLowerCase().includes(q)) continue;
+      const cat = it.category || "Uncategorized";
+      if (cat !== lastCat) {
+        lastCat = cat;
+        const h = document.createElement("div");
+        h.className = "muted";
+        h.style.cssText = "margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.6px";
+        h.textContent = cat;
+        box.appendChild(h);
+      }
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === it.key ? " sel" : "");
+      row.innerHTML = `<span>${esc(it.name)}</span>
+        <span class="sub">${esc(this.effectSummary(it.effect))}</span>`;
+      row.onclick = () => { this.sel = it.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+  },
+  item() { return this.data.items.find(i => i.key === this.sel); },
+  renderEditor() {
+    const box = $("#iedit");
+    const it = this.creating
+      ? { name: "", category: "", cost: null, desc: "", effect: null,
+          consumable: true, uses: 1 }
+      : this.item();
+    if (!it) { box.innerHTML = "<p class='muted'>Select an item.</p>"; return; }
+    const e = it.effect || {};
+    box.innerHTML = `
+      <h2>${this.creating ? "New item" : esc(it.name)}</h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Name ${this.creating ? "" : "<span class='muted'>(the key — create a new item to rename)</span>"}</label>
+            <input type="text" id="if-name" value="${esc(it.name)}" ${this.creating ? "" : "readonly"}></div>
+          <div><label>Category</label><input type="text" id="if-cat" value="${esc(it.category)}"></div>
+          <div><label>Shop cost (blank = not priced)</label>
+            <input type="number" id="if-cost" value="${it.cost ?? ""}"></div>
+          <div><label>Uses per copy</label><input type="number" id="if-uses"
+            min="1" max="10" value="${it.uses || 1}"></div>
+        </div>
+        <label style="margin-top:12px"><input type="checkbox" id="if-cons"
+          ${it.consumable !== false ? "checked" : ""}> Consumable (spent on use)</label>
+        <label>Description</label>
+        <textarea id="if-desc" rows="3">${esc(it.desc)}</textarea>
+        <hr>
+        <h2>Effect on /use</h2>
+        <div class="grid3">
+          <div><label>Kind</label><select id="if-kind">
+            ${(() => { const kinds = ["none", "damage", "heal", "status"];
+                       if (e.kind && !kinds.includes(e.kind)) kinds.push(e.kind);
+                       return kinds.map(k =>
+              `<option value="${k}" ${(e.kind || "none") === k ? "selected" : ""}>${k}</option>`).join(""); })()}
+          </select></div>
+          <div><label>Amount</label><input type="number" id="if-amount" value="${e.amount ?? ""}"></div>
+          <div><label>Max (roll upper end)</label><input type="number" id="if-max" value="${e.max ?? ""}"></div>
+          <div><label>Status name</label><input type="text" id="if-status" value="${esc(e.status || "")}"></div>
+          <div><label>Damage / tick</label><input type="number" id="if-dot" value="${e.dot ?? ""}"></div>
+        </div>
+        <label style="margin-top:12px"><input type="checkbox" id="if-ooc"
+          ${e.ooc ? "checked" : ""}> Usable outside combat (status is declared
+          to the line and the item is spent — social/utility items)</label>
+        <p class="hint" style="margin-top:8px">kind none = flavor item. damage/heal
+        use Amount (+ Max for a roll); status applies the named status, with
+        optional per-tick damage.</p>
+        <div class="btnrow">
+          <button class="btn primary" id="if-save">${this.creating ? "Create item" : "Save item"}</button>
+          ${this.creating ? '<button class="btn" id="if-cancel">Cancel</button>'
+                          : '<button class="btn danger" id="if-del">Delete…</button>'}
+        </div>
+      </div>`;
+    $("#if-save").onclick = () => {
+      const kind = $("#if-kind").value;
+      api("/api/dash/item", {
+        name: $("#if-name").value,
+        category: $("#if-cat").value,
+        cost: $("#if-cost").value === "" ? null : parseInt($("#if-cost").value, 10),
+        uses: parseInt($("#if-uses").value || "1", 10),
+        consumable: $("#if-cons").checked,
+        desc: $("#if-desc").value,
+        effect: kind === "none" ? null : {
+          kind,
+          amount: $("#if-amount").value === "" ? null : parseInt($("#if-amount").value, 10),
+          max: $("#if-max").value === "" ? null : parseInt($("#if-max").value, 10),
+          status: $("#if-status").value,
+          dot: $("#if-dot").value === "" ? null : parseInt($("#if-dot").value, 10),
+          ooc: $("#if-ooc").checked,
+        },
+      }).then(() => {
+        toast(this.creating ? "Item created" : "Item saved");
+        const key = $("#if-name").value.trim().toLowerCase();
+        this.creating = false;
+        this.sel = key;
+        this.load();
+      }).catch(e2 => toast(e2.message, true));
+    };
+    if (this.creating) {
+      $("#if-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+    } else {
+      $("#if-del").onclick = () => {
+        if (!confirm(`Delete the definition of ${it.name}? Copies players ` +
+                     "hold keep working as flavor items."))
+          return;
+        api("/api/dash/item-delete", { name: it.name })
+          .then(() => { toast("Deleted"); Items.sel = null; Items.load(); })
+          .catch(e2 => toast(e2.message, true));
+      };
+    }
+  },
+};
+$("#isearch").oninput = () => Items.renderList();
+$("#inew").onclick = () => { Items.creating = true; Items.renderEditor(); };
+
+/* ---------- boot ---------- */
+$("#cfgbtn").onclick = openGate;
+if (API) img.src = API + "/dash/underlay";
+if (!TOKEN) openGate();
+else refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>
