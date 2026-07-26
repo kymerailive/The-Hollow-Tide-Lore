@@ -152,9 +152,27 @@
   .lrow:hover { background: var(--panel2); }
   .lrow.sel { background: rgba(95,192,119,.1);
               outline: 1px solid var(--accent); }
+  .lrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+              white-space: nowrap; }
   .lrow .sub { margin-left: auto; color: var(--dim); font-size: 12px;
                white-space: nowrap; font-variant-numeric: tabular-nums;
-               display: inline-flex; gap: 5px; align-items: center; }
+               display: inline-flex; gap: 5px; align-items: center;
+               flex-shrink: 0; }
+  .cathdr { position: sticky; top: -14px; z-index: 2; background: var(--panel);
+            margin: 10px -4px 3px; padding: 6px 9px 4px; font-size: 10.5px;
+            text-transform: uppercase; letter-spacing: .9px; color: var(--faint);
+            font-weight: 700; border-bottom: 1px solid var(--line); }
+  .fx { display: inline-flex; align-items: center; justify-content: center;
+        max-width: 138px; padding: 2.5px 10px; border-radius: 9px;
+        font-size: 11px; font-weight: 600; letter-spacing: .2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        flex-shrink: 0; }
+  .fx.damage  { color: #f0a191; background: rgba(224,105,90,.14); }
+  .fx.heal    { color: #8fdba2; background: rgba(95,192,119,.14); }
+  .fx.status  { color: #a3bbe8; background: rgba(104,142,219,.14); }
+  .fx.ooc     { color: #8fd8d2; background: rgba(88,190,182,.13); }
+  .fx.special { color: #e2c188; background: rgba(217,164,65,.13); }
+  .fx.flavor  { color: var(--faint); background: var(--panel2); }
   .badge { font-size: 10px; padding: 2.5px 8px; border-radius: 10px;
            background: var(--panel2); color: var(--dim); font-weight: 600;
            letter-spacing: .3px; }
@@ -308,6 +326,31 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => Number(n || 0).toLocaleString();
+// Compact money for list rows (editors always show the full figure).
+const fmtC = n => {
+  n = Number(n || 0);
+  const f = (v, s) => (v.toFixed(1).replace(/\.0$/, "")) + s;
+  if (n >= 1e9) return f(n / 1e9, "B");
+  if (n >= 1e6) return f(n / 1e6, "M");
+  if (n >= 1e3) return f(n / 1e3, "K");
+  return String(n);
+};
+// Uniform effect badge for item rows: fixed-size pill, full text in tooltip.
+function fxBadge(it) {
+  const e = it.effect;
+  if (!e) return { cls: "flavor", label: "flavor", title: "flavor item — narrates only" };
+  const k = e.kind;
+  const roll = (e.amount ?? "") + (e.max ? "–" + e.max : "");
+  if (k === "damage") return { cls: "damage", label: "dmg " + roll, title: Items.effectSummary(e) };
+  if (k === "heal") return { cls: "heal", label: "heal " + roll, title: Items.effectSummary(e) };
+  if (k === "status") {
+    const s = e.status || "status";
+    return { cls: e.ooc ? "ooc" : "status",
+             label: (e.dot ? "◈ " : "") + s,
+             title: Items.effectSummary(e) + (e.ooc ? " · usable outside combat" : "") };
+  }
+  return { cls: "special", label: k, title: Items.effectSummary(e) };
+}
 const overlay = $("#overlay"), wrap = $("#mapwrap"), img = $("#underlay"),
       zoomer = $("#zoomer");
 
@@ -620,8 +663,8 @@ const Players = {
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === p.id ? " sel" : "");
       row.style.paddingLeft = "18px";
-      row.innerHTML = `<span>${esc(p.name)}</span>
-        <span class="sub">$${fmt(p.wallet)}${p.inventory.length
+      row.innerHTML = `<span class="nm">${esc(p.name)}</span>
+        <span class="sub" title="$${fmt(p.wallet)}">$${fmtC(p.wallet)}${p.inventory.length
           ? " · " + p.inventory.length + " it." : ""}</span>`;
       row.onclick = () => { this.sel = p.id; this.selTeam = null;
                             this.creating = false;
@@ -637,8 +680,8 @@ const Players = {
       hdr.className = "lrow" + (this.selTeam === gid ? " sel" : "");
       hdr.style.fontWeight = "600";
       hdr.innerHTML = `<span class="swatch" style="background:${this.teamColorAt(gid)}"></span>
-        <span>${esc(tname)}</span>
-        <span class="sub">$${fmt(econ.treasury)} · stash ${econ.stash.length}</span>`;
+        <span class="nm">${esc(tname)}</span>
+        <span class="sub" title="$${fmt(econ.treasury)}">$${fmtC(econ.treasury)} · stash ${econ.stash.length}</span>`;
       hdr.onclick = () => { this.selTeam = gid; this.sel = null;
                             this.creating = false;
                             this.renderList(); this.renderEditor(); };
@@ -939,7 +982,7 @@ const Npcs = {
       if (q && !n.name.toLowerCase().includes(q) && !n.key.includes(q)) continue;
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === n.key ? " sel" : "");
-      row.innerHTML = `<span>${esc(n.name)}</span>
+      row.innerHTML = `<span class="nm">${esc(n.name)}</span>
         <span class="sub">
           ${n.dead ? '<span class="badge dead">dead</span>' : ""}
           <span class="badge ${n.auto ? "on" : "off"}">${n.auto ? "auto" : "manual"}</span>
@@ -1112,15 +1155,15 @@ const Items = {
       if (cat !== lastCat) {
         lastCat = cat;
         const h = document.createElement("div");
-        h.className = "muted";
-        h.style.cssText = "margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.6px";
+        h.className = "cathdr";
         h.textContent = cat;
         box.appendChild(h);
       }
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === it.key ? " sel" : "");
-      row.innerHTML = `<span>${esc(it.name)}</span>
-        <span class="sub">${esc(this.effectSummary(it.effect))}</span>`;
+      const b = fxBadge(it);
+      row.innerHTML = `<span class="nm">${esc(it.name)}</span>
+        <span class="fx ${b.cls}" title="${esc(b.title)}">${esc(b.label)}</span>`;
       row.onclick = () => { this.sel = it.key; this.creating = false;
                             this.renderList(); this.renderEditor(); };
       box.appendChild(row);
