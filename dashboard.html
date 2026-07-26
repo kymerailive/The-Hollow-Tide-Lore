@@ -301,9 +301,9 @@
     <p class="hint">Bot API address — leave as-is when the bot runs on this
     machine; after the server move, put its https address here.</p>
     <input id="apiin" type="text" placeholder="http://127.0.0.1:8787" style="width:100%;margin:8px 0 2px">
-    <p class="hint" style="margin-top:8px">Token — the HT_API_TOKEN from the
-    bot's .env. Both are kept in this browser.</p>
-    <input id="tokenin" type="password" placeholder="token">
+    <p class="hint" style="margin-top:8px">Password — the dashboard password
+    (or the HT_API_TOKEN) from the bot's .env. Both are kept in this browser.</p>
+    <input id="tokenin" type="password" placeholder="password">
     <button onclick="saveToken()">Unlock</button>
   </div>
 </div>
@@ -403,10 +403,28 @@ function toast(msg, err) {
   t.style.opacity = 1;
   setTimeout(() => t.style.opacity = 0, 2600);
 }
-function saveToken() {
-  TOKEN = $("#tokenin").value.trim();
+async function sha256hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+async function saveToken() {
+  const raw = $("#tokenin").value.trim();
   API = $("#apiin").value.trim().replace(/\/+$/, "");
   if (SERVED_BY_BOT && (API === location.origin || API === "")) API = "";
+  // The input takes EITHER a real token OR the lore-site passcode. Try the
+  // value as-is first; on 401, hash the normalized passcode and try that —
+  // so knowing the website password is enough, and the password itself
+  // never leaves the browser.
+  TOKEN = raw;
+  let ok = false;
+  try {
+    const r = await fetch(API + "/api/state",
+                          { headers: { "Authorization": "Bearer " + TOKEN } });
+    ok = r.ok;
+  } catch (e) { ok = false; }
+  if (!ok && raw) {
+    TOKEN = await sha256hex(raw.replace(/\s+/g, "").toLowerCase());
+  }
   localStorage.setItem("ht_token", TOKEN);
   localStorage.setItem("ht_api_base", API);
   $("#tokengate").style.display = "none";
@@ -1435,6 +1453,17 @@ $("#inew").onclick = () => { Items.creating = true; Items.renderEditor(); };
 
 /* ---------- boot ---------- */
 $("#cfgbtn").onclick = openGate;
+// The codex hands its unlock over in the URL fragment (#k=<derived hash>) so
+// the dashboard opens live for anyone who entered the website password there.
+// The fragment never reaches any server; strip it once stored.
+{
+  const m = location.hash.match(/[#&]k=([0-9a-f]{64})/);
+  if (m) {
+    TOKEN = m[1];
+    localStorage.setItem("ht_token", TOKEN);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+}
 if (API) img.src = API + "/dash/underlay";
 if (!TOKEN) openGate();
 else refresh();
