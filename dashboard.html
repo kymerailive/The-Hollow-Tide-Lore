@@ -323,12 +323,15 @@ const PALETTE = ["#2e8b57","#e07b39","#7b4fa6","#2a8fa3","#3b6bd6","#c14953",
                  "#b28c2e","#6b8e23"];
 let TOKEN = localStorage.getItem("ht_token") || "";
 // API base: empty = same origin (the page is served by the bot itself).
-// The copy hosted on the lore site defaults to the local bot address —
-// loopback is exempt from mixed-content rules in Chrome, so the https page
-// can talk to http://127.0.0.1:8787 on the bot machine.
+// The copy hosted on the lore site reaches the bot through its public funnel
+// address when one is set; otherwise it falls back to the local bot address
+// (loopback is exempt from mixed-content rules in Chrome, so the https page
+// can talk to http://127.0.0.1:8787 on the bot machine). A hand-set address
+// in the ⚙ gate always wins.
 const SERVED_BY_BOT = location.port === "8787";
+const PUBLIC_API = "https://smallboi.tail7fc4d1.ts.net";   // the bot's Tailscale Funnel
 let API = localStorage.getItem("ht_api_base") ||
-          (SERVED_BY_BOT ? "" : "http://127.0.0.1:8787");
+          (SERVED_BY_BOT ? "" : (PUBLIC_API || "http://127.0.0.1:8787"));
 let state = null;          // last /api/map payload
 let teamColor = {};        // gid -> color
 let armedTeam = null;      // gid armed for whole-team move
