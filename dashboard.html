@@ -174,6 +174,9 @@
   .fx.ooc     { color: #8fd8d2; background: rgba(88,190,182,.13); }
   .fx.special { color: #e2c188; background: rgba(217,164,65,.13); }
   .fx.flavor  { color: var(--faint); background: var(--panel2); }
+  /* Never rolled by a restock or a box — granted deliberately or not at all. */
+  .fx.norolltag { color: #d9a1b4; background: rgba(200,90,125,.14);
+                  letter-spacing: .3px; }
   .badge { font-size: 10px; padding: 2.5px 8px; border-radius: 10px;
            background: var(--panel2); color: var(--dim); font-weight: 600;
            letter-spacing: .3px; }
@@ -218,6 +221,24 @@
   #tokengate button { width: 100%; padding: 9px; background: var(--accent);
                       border: 0; border-radius: 8px; color: var(--accent-ink);
                       font-weight: 700; cursor: pointer; font: inherit; }
+  /* Region card preview — shaped like the Discord embed /region posts, so what
+     the dashboard shows is what the table will see. */
+  .rprev { background: #2b2d31; border-left: 4px solid #5865f2; border-radius: 5px;
+           padding: 14px 16px 16px; max-width: 520px; color: #dbdee1;
+           font-size: 14px; line-height: 1.42; }
+  .rprev .rp-title { font-weight: 700; font-size: 16px; color: #f2f3f5;
+                     margin-bottom: 8px; }
+  .rprev .rp-desc { white-space: pre-wrap; margin-bottom: 14px; }
+  .rprev .rp-fields { display: grid; grid-template-columns: repeat(3, 1fr);
+                      gap: 14px 8px; }
+  .rprev .rp-fn { font-weight: 700; font-size: 13px; color: #f2f3f5;
+                  margin-bottom: 2px; }
+  .rprev .rp-fv { font-size: 13.5px; }
+  .rprev .rp-img { display: block; margin-top: 16px; max-width: 100%;
+                   border-radius: 5px; }
+  .rprev .rp-noimg { margin-top: 16px; padding: 22px; text-align: center;
+                     border: 1px dashed #4a4d55; border-radius: 5px;
+                     color: #949ba4; font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -229,6 +250,8 @@
     <span class="tab" data-view="npcs">NPCs</span>
     <span class="tab" data-view="items">Items</span>
     <span class="tab" data-view="quests">Questlines</span>
+    <span class="tab" data-view="regions">Regions</span>
+    <span class="tab" data-view="locations">Locations</span>
   </nav>
   <button id="newplacebtn" title="Add a new place to the island" style="margin-left:auto">＋ Place</button>
   <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
@@ -301,6 +324,26 @@
     <div id="qlist" style="margin-top:8px"></div>
   </div>
   <div class="editor card" id="qedit"><p class="muted">Select a questline.</p></div>
+</section>
+
+<section class="view" id="view-regions">
+  <div class="listpane card">
+    <input class="search" id="rsearch" type="text" placeholder="Search regions…">
+    <button class="btn mini" id="rnew">＋ New region display</button>
+    <div id="rlist" style="margin-top:8px"></div>
+  </div>
+  <div class="editor card" id="redit"><p class="muted">Select a region display.</p></div>
+</section>
+
+<section class="view" id="view-locations">
+  <div class="listpane card">
+    <input class="search" id="lsearch" type="text" placeholder="Search places…">
+    <div id="llist" style="margin-top:8px"></div>
+    <p class="hint" style="margin-top:8px">One sheet per map place. Sheets
+    with lore or interactables auto-draft narration when a player fires an
+    __underline action__ standing there — devs still ✅ every word.</p>
+  </div>
+  <div class="editor card" id="ledit"><p class="muted">Select a place.</p></div>
 </section>
 </main>
 
@@ -494,12 +537,47 @@ function switchView(v) {
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
   if (v === "quests") Quests.load();
+  if (v === "regions") Regions.load();
+  if (v === "locations") Locations.load();
 }
 
 /* ================= MAP ================= */
 function pct(v, axis) {
   const c = state.canvas;
   return (v / (axis === "x" ? c.w : c.h) * 100) + "%";
+}
+function tripSpot(t) {
+  // Where along the route a traveller is right now. Waypoint-aware (the GPS
+  // sends the same waypoint clock its arrival sweeper uses), falling back to
+  // a straight from→to line for trips without waypoints (/turnback). Null
+  // when neither end has coordinates — the caller then keeps the old
+  // parked-at-origin pawn.
+  const now = Date.now() / 1000;
+  const wps = (t.waypoints || []).filter(w => state.places[w.place]);
+  if (wps.length >= 2) {
+    let a = wps[0], b = wps[wps.length - 1];
+    if (now <= a.at) b = a;
+    else if (now >= b.at) a = b;
+    else for (let i = 0; i < wps.length - 1; i++)
+      if (now >= wps[i].at && now < wps[i + 1].at) { a = wps[i]; b = wps[i + 1]; break; }
+    const pa = state.places[a.place], pb = state.places[b.place];
+    const f = b.at > a.at ? (now - a.at) / (b.at - a.at) : 0;
+    return { x: pa.x + (pb.x - pa.x) * f, y: pa.y + (pb.y - pa.y) * f };
+  }
+  const pa = state.places[t.from], pb = state.places[t.to];
+  if (!pa || !pb) return null;
+  const f = Math.max(0, Math.min(1, (now - t.depart) / Math.max(1, t.arrive - t.depart)));
+  return { x: pa.x + (pb.x - pa.x) * f, y: pa.y + (pb.y - pa.y) * f };
+}
+function etaMin(t) {
+  return Math.max(0, Math.round((t.arrive - Date.now() / 1000) / 60));
+}
+function travelTag(pl) {
+  if (pl.trip) {
+    const to = (state.places[pl.trip.to] || {}).name || pl.trip.to;
+    return ` ✈ → ${to} (~${etaMin(pl.trip)}m)`;
+  }
+  return pl.traveling ? " ✈" : "";
 }
 function render() {
   overlay.innerHTML = "";
@@ -520,8 +598,10 @@ function render() {
     overlay.appendChild(el);
   }
   const byPlace = {};
+  const enRoute = [];
   for (const pl of state.players) {
     if (!pl.place || !state.places[pl.place]) continue;
+    if (pl.trip && tripSpot(pl.trip)) { enRoute.push(pl); continue; } // drawn en route below
     const gkey = pl.team ? pl.team : "solo:" + pl.id;
     const bucket = (byPlace[pl.place] = byPlace[pl.place] || {});
     (bucket[gkey] = bucket[gkey] || []).push(pl);
@@ -540,11 +620,30 @@ function render() {
       el.style.top = pct(p.y + 22 + Math.floor(i / 4) * 20, "y");
       const label = solo ? members[0].name : (state.teams[gkey] || "team");
       el.title = `${label} — ${p.name}\n` +
-                 members.map(m => m.name + (m.traveling ? " ✈" : "")).join(", ");
+                 members.map(m => m.name + travelTag(m)).join(", ");
       el.onpointerdown = e => startDrag(
         e, solo ? { player_id: members[0].id } : { team: gkey }, el, label);
       overlay.appendChild(el);
     });
+  }
+  // Travellers ride the map live: drawn at their current point along the
+  // route (waypoint-aware), refreshed with every poll — what the GPS knows,
+  // the dashboard shows. Dragging one still force-moves them (ends the trip).
+  for (const pl of enRoute) {
+    const t = pl.trip, spot = tripSpot(t);
+    if (!spot) continue;
+    const el = document.createElement("div");
+    el.className = "pawn traveling";
+    const col = teamColor[pl.team] || "#8b93a2";
+    el.style.background = col;
+    el.style.color = col;
+    el.style.left = pct(spot.x, "x");
+    el.style.top = pct(spot.y, "y");
+    const from = (state.places[t.from] || {}).name || t.from;
+    const to = (state.places[t.to] || {}).name || t.to;
+    el.title = `${pl.name} ✈ ${from} → ${to} (${t.mode}, ~${etaMin(t)}m)`;
+    el.onpointerdown = e => startDrag(e, { player_id: pl.id }, el, pl.name);
+    overlay.appendChild(el);
   }
   const teams = $("#teams");
   teams.innerHTML = "";
@@ -598,7 +697,7 @@ function showPlace(key) {
     <div class="hint">${esc(p.desc || "")}${p.new
       ? `<br>found by: ${esc((p.discovered_by || []).join(", ") || "no one yet")}` : ""}</div>
     <div class="who" style="margin-top:6px">${here.length
-      ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${pl.traveling ? " ✈" : ""}</div>`).join("")
+      ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${esc(travelTag(pl))}</div>`).join("")
       : "<div class='hint'>nobody here</div>"}</div>
     <div class="btnrow" style="margin-top:10px">
       <button class="btn mini" id="plc-edit">✎ Edit place</button>
@@ -900,8 +999,20 @@ const Players = {
           </select>
           <button class="btn" id="pf-locgo">Move</button>
         </div>`}
-        <label>Gif (URL or local:file)</label>
-        <input type="text" id="pf-gif" value="${esc(p.gif)}">
+        <label>Gif — paste a URL, or upload a file</label>
+        <input type="text" id="pf-gif" value="${esc(p.gif)}"
+               placeholder="https://… (or upload a file below)">
+        <div style="display:flex;gap:7px;align-items:center;margin-top:6px">
+          <input type="file" id="pf-giffile" accept=".gif,.png,.jpg,.jpeg,.webp,image/*"
+                 style="flex:1;font-size:12px">
+          <button class="btn" id="pf-gifup">Upload</button>
+        </div>
+        <p class="hint" id="pf-gifnote" style="margin-top:5px">${
+          p.gif && p.gif.startsWith("local:")
+            ? "Currently an uploaded file — <code>" + esc(p.gif.slice(6)) + "</code>."
+            : (p.gif ? "Currently a URL. Uploading a file replaces it."
+                     : "No gif set. A file is stored on the bot and never expires; "
+                       + "Discord CDN links do.")}</p>
         <label>Titles (one per line)</label>
         <textarea id="pf-titles" rows="3">${esc((p.titles || []).join("\n"))}</textarea>
         <div class="btnrow">
@@ -992,6 +1103,34 @@ const Players = {
                       Players.load(); })
         .catch(e => toast(e.message, true));
     };
+    // Gif by FILE. Sent base64 over the same JSON+auth path as everything else;
+    // the bot stores it under player_gifs/ and attaches it to every embed, so
+    // unlike a Discord CDN link it never expires.
+    const gifFile = $("#pf-giffile"), gifUp = $("#pf-gifup");
+    const sendGif = () => {
+      const f = gifFile.files && gifFile.files[0];
+      if (!f) { toast("Pick a file first", true); return; }
+      if (f.size > 10 * 1024 * 1024) {
+        toast(`That file is ${(f.size / 1024 / 1024).toFixed(1)}MB — keep it under 10MB`, true);
+        return;
+      }
+      gifUp.disabled = true;
+      gifUp.textContent = "Uploading…";
+      const fr = new FileReader();
+      fr.onerror = () => { gifUp.disabled = false; gifUp.textContent = "Upload";
+                           toast("Couldn't read that file", true); };
+      fr.onload = () => {
+        api("/api/dash/player-gif", { id: p.id, filename: f.name,
+                                      content_type: f.type,
+                                      data: String(fr.result).split(",")[1] })
+          .then(r => { toast(`Gif uploaded — ${r.display}`); Players.load(); })
+          .catch(e => { gifUp.disabled = false; gifUp.textContent = "Upload";
+                        toast(e.message, true); });
+      };
+      fr.readAsDataURL(f);
+    };
+    gifUp.onclick = sendGif;
+    gifFile.onchange = () => { if (gifFile.files[0]) sendGif(); };  // picking is the intent
     $("#pf-save").onclick = () => {
       const body = {
         id: p.id,
@@ -1377,6 +1516,11 @@ const Items = {
       row.className = "lrow" + (this.sel === it.key ? " sel" : "");
       const b = fxBadge(it);
       row.innerHTML = `<span class="nm">${esc(it.name)}</span>
+        ${it.roll_block ? `<span class="fx norolltag" title="${
+            it.roll_block === "permanent"
+              ? "Blocked in the bot's source — never rolled."
+              : "Removed from the restock roll on this dashboard."
+          }">no roll</span>` : ""}
         <span class="fx ${b.cls}" title="${esc(b.title)}">${esc(b.label)}</span>`;
       row.onclick = () => { this.sel = it.key; this.creating = false;
                             this.renderList(); this.renderEditor(); };
@@ -1428,6 +1572,22 @@ const Items = {
         <p class="hint" style="margin-top:8px">kind none = flavor item. damage/heal
         use Amount (+ Max for a roll); status applies the named status, with
         optional per-tick damage.</p>
+        ${this.creating ? "" : `
+        <hr>
+        <h2>Restock</h2>
+        <div class="btnrow" style="margin-top:6px">
+          <button class="btn ${it.roll_block ? "" : "danger"}" id="if-roll"
+                  ${it.roll_block === "permanent" ? "disabled" : ""}>${
+            it.roll_block === "permanent" ? "Blocked in source"
+              : it.roll_block ? "Put back in the restock"
+                              : "Remove from the restock"}</button>
+        </div>
+        <p class="hint" style="margin-top:6px">${
+          it.roll_block === "permanent"
+            ? "Blocked in the bot's source — its rules break the game if it can be bought, so this can't be changed here."
+            : it.roll_block
+              ? "Removed. No vendor restock or mystery box can roll it, and any stall already holding it drops it the next time it's opened. Grant it deliberately instead."
+              : "Currently rollable. Remove quest rewards, mythical cards, and anything else that has to be earned in fiction rather than bought off a stall."}</p>`}
         <div class="btnrow">
           <button class="btn primary" id="if-save">${this.creating ? "Create item" : "Save item"}</button>
           ${this.creating ? '<button class="btn" id="if-cancel">Cancel</button>'
@@ -1462,6 +1622,13 @@ const Items = {
     if (this.creating) {
       $("#if-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
     } else {
+      if (it.roll_block !== "permanent") $("#if-roll").onclick = () => {
+        api("/api/dash/item-roll", { name: it.key, no_roll: !it.roll_block })
+          .then(r => { toast(r.no_roll ? `${it.name} won't be restocked`
+                                       : `${it.name} is back in the restock`);
+                       Items.load(); })
+          .catch(e2 => toast(e2.message, true));
+      };
       $("#if-del").onclick = () => {
         if (!confirm(`Delete the definition of ${it.name}? Copies players ` +
                      "hold keep working as flavor items."))
@@ -1607,6 +1774,333 @@ const Quests = {
   },
 };
 $("#qsearch").oninput = () => Quests.renderList();
+
+/* ================= REGION DISPLAYS ================= */
+/* The standing card for a place — what /region posts to a line. The five stat
+   fields come from the bot so the editor, the preview and the embed can never
+   drift apart. */
+const Regions = {
+  data: null, sel: null, creating: false, imgUrl: null,
+  async load() {
+    try { this.data = await api("/api/dash/regions"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  blank() {
+    const r = { name: "", desc: "", place: "", image: "",
+                author: localStorage.getItem("ht_author") || "" };
+    this.data.fields.forEach(f => r[f.key] = "");
+    return r;
+  },
+  renderList() {
+    const q = $("#rsearch").value.trim().toLowerCase();
+    const box = $("#rlist");
+    box.innerHTML = "";
+    const rows = [...this.data.regions].sort((a, b) => a.name.localeCompare(b.name));
+    for (const it of rows) {
+      if (q && !(it.name + " " + (it.sovereignty || "")).toLowerCase().includes(q))
+        continue;
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === it.key ? " sel" : "");
+      row.innerHTML = `<span class="nm">${esc(it.name)}</span>
+        <span class="sub">${esc(it.sovereignty || "unclaimed")}</span>`;
+      row.onclick = () => { this.sel = it.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+    if (!box.childElementCount)
+      box.innerHTML = "<p class='muted'>No region displays yet — make the first one.</p>";
+  },
+  region() { return this.data.regions.find(i => i.key === this.sel); },
+  // Read the form rather than the saved record, so the preview tracks typing.
+  formValues(it) {
+    const v = { name: $("#rf-name").value, desc: $("#rf-desc").value,
+                image: $("#rf-image").value };
+    this.data.fields.forEach(f => v[f.key] = $("#rf-" + f.key).value);
+    v.local_image = it.local_image || "";
+    return v;
+  },
+  previewHtml(r) {
+    const fields = this.data.fields.map(f => `
+      <div class="rp-f"><div class="rp-fn">${f.emoji} ${esc(f.label)}</div>
+        <div class="rp-fv">${esc(r[f.key] || "Unknown")}</div></div>`).join("");
+    const img = r.image ? `<img class="rp-img" src="${esc(r.image)}" alt="">`
+      : (this.imgUrl ? `<img class="rp-img" src="${this.imgUrl}" alt="">`
+                     : `<div class="rp-noimg">No map image yet — paste a URL or
+                        upload a file above.</div>`);
+    return `<div class="rprev">
+      <div class="rp-title">${esc(r.name || "Untitled region")}</div>
+      ${r.desc ? `<div class="rp-desc">${esc(r.desc)}</div>` : ""}
+      <div class="rp-fields">${fields}</div>
+      ${img}
+    </div>`;
+  },
+  repaint(it) { $("#rf-preview").innerHTML = this.previewHtml(this.formValues(it)); },
+  // Uploaded maps sit behind the same auth as every other data route, so an
+  // <img src> can't reach them — fetch with the header, then use a blob URL.
+  async loadUploaded(key) {
+    if (this.imgUrl) { URL.revokeObjectURL(this.imgUrl); this.imgUrl = null; }
+    try {
+      const r = await fetch(API + "/api/dash/region-image?key=" + encodeURIComponent(key),
+                            { headers: { "Authorization": "Bearer " + TOKEN } });
+      if (!r.ok) return;
+      this.imgUrl = URL.createObjectURL(await r.blob());
+    } catch (e) { /* preview only — a missing map is not an error worth a toast */ }
+  },
+  renderEditor() {
+    const box = $("#redit");
+    const it = this.creating ? this.blank() : this.region();
+    if (!it) { box.innerHTML = "<p class='muted'>Select a region display.</p>"; return; }
+    const places = Object.entries(this.data.places)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    box.innerHTML = `
+      <h2>${this.creating ? "New region display" : esc(it.name)}</h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Name — the card's title</label>
+            <input type="text" id="rf-name" value="${esc(it.name)}"
+                   placeholder="Final Measure"></div>
+          <div><label>Place on the map (optional)</label><select id="rf-place">
+            <option value="">— not tied to a map place —</option>
+            ${places.map(([k, n]) =>
+              `<option value="${k}" ${it.place === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
+          </select></div>
+          ${this.data.fields.map(f => `
+          <div><label>${f.emoji} ${esc(f.label)}</label>
+            <input type="text" id="rf-${f.key}" value="${esc(it[f.key] || "")}"
+                   placeholder="Unknown"></div>`).join("")}
+          <div><label>Your name (for the audit log)</label>
+            <input type="text" id="rf-author" value="${esc(it.author || "")}"></div>
+        </div>
+        <label>Description — the paragraph under the title</label>
+        <textarea id="rf-desc" rows="4">${esc(it.desc || "")}</textarea>
+        <label>Map image — paste a URL, or upload a file</label>
+        <input type="text" id="rf-image" value="${esc(it.image || "")}"
+               placeholder="https://… (or upload a file below)">
+        <div style="display:flex;gap:7px;align-items:center;margin-top:6px">
+          <input type="file" id="rf-imgfile" accept=".gif,.png,.jpg,.jpeg,.webp,image/*"
+                 style="flex:1;font-size:12px" ${this.creating ? "disabled" : ""}>
+          <button class="btn" id="rf-imgup" ${this.creating ? "disabled" : ""}>Upload</button>
+        </div>
+        <p class="hint" style="margin-top:5px">${this.creating
+          ? "Save the region once, then you can upload its map."
+          : (it.local_image ? "Currently an uploaded file. A pasted URL would override it."
+                            : "A pasted URL wins over an upload.")}</p>
+        ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
+        <div class="btnrow">
+          <button class="btn primary" id="rf-save">${this.creating ? "Create region display" : "Save region display"}</button>
+          ${this.creating ? '<button class="btn" id="rf-cancel">Cancel</button>'
+                          : '<button class="btn danger" id="rf-del">Delete…</button>'}
+        </div>
+        <hr>
+        <h2>Preview <span class="muted">— what <code>/region</code> posts</span></h2>
+        <div id="rf-preview" style="margin-top:8px"></div>
+      </div>`;
+    // Live preview: every field repaints as it's typed.
+    ["rf-name", "rf-desc", "rf-image", ...this.data.fields.map(f => "rf-" + f.key)]
+      .forEach(id => $("#" + id).oninput = () => this.repaint(it));
+    this.imgUrl = null;
+    this.repaint(it);
+    if (!this.creating && it.local_image && !it.image)
+      this.loadUploaded(it.key).then(() => this.repaint(it));
+
+    $("#rf-save").onclick = () => {
+      const author = $("#rf-author").value.trim();
+      if (author) localStorage.setItem("ht_author", author);
+      const body = { key: this.creating ? null : it.key, author,
+                     place: $("#rf-place").value, ...this.formValues(it) };
+      delete body.local_image;
+      api("/api/dash/region", body).then(j => {
+        toast(this.creating ? "Region display created" : "Region display saved");
+        this.creating = false;
+        this.sel = j.key;
+        this.load();
+      }).catch(e2 => toast(e2.message, true));
+    };
+    if (this.creating) {
+      $("#rf-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+      return;
+    }
+    $("#rf-del").onclick = () => {
+      if (!confirm(`Delete the region display “${it.name}”? This can't be undone.`))
+        return;
+      api("/api/dash/region-delete", { key: it.key })
+        .then(() => { toast("Deleted"); Regions.sel = null; Regions.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+    const f = $("#rf-imgfile"), up = $("#rf-imgup");
+    const sendImg = () => {
+      const file = f.files && f.files[0];
+      if (!file) { toast("Pick a file first", true); return; }
+      if (file.size > 10 * 1024 * 1024) {
+        toast(`That file is ${(file.size / 1024 / 1024).toFixed(1)}MB — keep it under 10MB`, true);
+        return;
+      }
+      up.disabled = true;
+      up.textContent = "Uploading…";
+      const fr = new FileReader();
+      fr.onerror = () => { up.disabled = false; up.textContent = "Upload";
+                           toast("Couldn't read that file", true); };
+      fr.onload = () => {
+        api("/api/dash/region-image", { key: it.key, filename: file.name,
+                                        content_type: file.type,
+                                        data: String(fr.result).split(",")[1] })
+          .then(() => { toast("Map uploaded"); Regions.load(); })
+          .catch(e2 => { up.disabled = false; up.textContent = "Upload";
+                         toast(e2.message, true); });
+      };
+      fr.readAsDataURL(file);
+    };
+    up.onclick = sendImg;
+    f.onchange = () => { if (f.files[0]) sendImg(); };
+  },
+};
+$("#rsearch").oninput = () => Regions.renderList();
+$("#rnew").onclick = () => { Regions.creating = true; Regions.sel = null;
+                             Regions.renderList(); Regions.renderEditor(); };
+
+/* ---------- Locations: per-place lore, maps, interactables ---------- */
+const Locations = {
+  data: null, sel: null, imgUrl: null,
+  async load() {
+    try { this.data = await api("/api/dash/locations"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  loc() { return this.data.locations[this.sel] || null; },
+  renderList() {
+    const q = $("#lsearch").value.trim().toLowerCase();
+    const box = $("#llist");
+    box.innerHTML = "";
+    const rows = Object.entries(this.data.places)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    for (const [key, name] of rows) {
+      if (q && !name.toLowerCase().includes(q)) continue;
+      const rec = this.data.locations[key];
+      const bits = [];
+      if (rec && rec.lore) bits.push("lore");
+      if (rec && (rec.interactables || []).length)
+        bits.push(`${rec.interactables.length} interactable${rec.interactables.length === 1 ? "" : "s"}`);
+      if (rec && (rec.local_image || rec.image)) bits.push("map");
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === key ? " sel" : "");
+      row.innerHTML = `<span class="nm">${esc(name)}</span>
+        <span class="sub">${bits.length ? esc(bits.join(" · ")) : "no sheet yet"}</span>`;
+      row.onclick = () => { this.sel = key; this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+  },
+  // Interactables travel as a textarea, one per line: "Name :: description".
+  parseInteractables(text) {
+    return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      const [name, ...rest] = l.split("::");
+      return { name: name.trim(), desc: rest.join("::").trim() };
+    }).filter(i => i.name);
+  },
+  async loadUploaded(key) {
+    if (this.imgUrl) { URL.revokeObjectURL(this.imgUrl); this.imgUrl = null; }
+    try {
+      const r = await fetch(API + "/api/dash/location-image?key=" + encodeURIComponent(key),
+                            { headers: { "Authorization": "Bearer " + TOKEN } });
+      if (!r.ok) return;
+      this.imgUrl = URL.createObjectURL(await r.blob());
+      const img = $("#lf-mappreview");
+      if (img) { img.src = this.imgUrl; img.style.display = ""; }
+    } catch (e) { /* preview only */ }
+  },
+  renderEditor() {
+    const box = $("#ledit");
+    if (!this.sel) { box.innerHTML = "<p class='muted'>Select a place.</p>"; return; }
+    const name = this.data.places[this.sel];
+    const it = this.loc() || { lore: "", image: "", interactables: [],
+                               author: localStorage.getItem("ht_author") || "" };
+    const interText = (it.interactables || [])
+      .map(i => i.desc ? `${i.name} :: ${i.desc}` : i.name).join("\n");
+    box.innerHTML = `
+      <h2>${esc(name)}</h2>
+      <div class="frm">
+        <label>Lore — what the narrator knows about this place (players never
+        see this raw; it grounds the auto-drafted narration)</label>
+        <textarea id="lf-lore" rows="8"
+          placeholder="History, atmosphere, secrets, who tends the shrine…">${esc(it.lore || "")}</textarea>
+        <label>Interactables — one per line, <code>Name :: description</code>
+        (places, items, features a player can act on)</label>
+        <textarea id="lf-inter" rows="6"
+          placeholder="Moss-covered altar :: offerings left here are remembered&#10;Rope bridge :: frayed; holds one person at a time">${esc(interText)}</textarea>
+        <label>Map image — paste a URL, or upload a file</label>
+        <input type="text" id="lf-image" value="${esc(it.image || "")}"
+               placeholder="https://… (or upload a file below)">
+        <div style="display:flex;gap:7px;align-items:center;margin-top:6px">
+          <input type="file" id="lf-imgfile" accept=".gif,.png,.jpg,.jpeg,.webp,image/*"
+                 style="flex:1;font-size:12px">
+          <button class="btn" id="lf-imgup">Upload</button>
+        </div>
+        <img id="lf-mappreview" alt="" style="display:none;max-width:100%;
+             border-radius:8px;margin-top:8px">
+        <div class="grid2" style="margin-top:8px">
+          <div><label>Your name (for the audit log)</label>
+            <input type="text" id="lf-author" value="${esc(it.author || "")}"></div>
+        </div>
+        ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
+        <div class="btnrow">
+          <button class="btn primary" id="lf-save">Save location sheet</button>
+          ${this.loc() ? '<button class="btn danger" id="lf-del">Delete sheet…</button>' : ""}
+        </div>
+        <p class="hint" style="margin-top:8px">With lore or interactables
+        saved, a player's __underline action__ here auto-drafts a narration
+        beat to the dev room — ✅ pushes it to the line, ❌ discards it.</p>
+      </div>`;
+    this.imgUrl = null;
+    if (it.local_image && !it.image) this.loadUploaded(this.sel);
+    $("#lf-save").onclick = () => {
+      const author = $("#lf-author").value.trim();
+      if (author) localStorage.setItem("ht_author", author);
+      api("/api/dash/location", {
+        place: this.sel, author,
+        lore: $("#lf-lore").value,
+        image: $("#lf-image").value.trim(),
+        interactables: this.parseInteractables($("#lf-inter").value),
+      }).then(() => { toast("Location sheet saved"); this.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+    const del = $("#lf-del");
+    if (del) del.onclick = () => {
+      if (!confirm(`Delete the location sheet for “${name}”? The place stays on the map; only the lore/map/interactables go.`))
+        return;
+      api("/api/dash/location-delete", { place: this.sel })
+        .then(() => { toast("Sheet deleted"); this.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+    const f = $("#lf-imgfile"), up = $("#lf-imgup");
+    const sendImg = () => {
+      const file = f.files && f.files[0];
+      if (!file) { toast("Pick a file first", true); return; }
+      if (file.size > 10 * 1024 * 1024) {
+        toast(`That file is ${(file.size / 1024 / 1024).toFixed(1)}MB — keep it under 10MB`, true);
+        return;
+      }
+      up.disabled = true;
+      up.textContent = "Uploading…";
+      const fr = new FileReader();
+      fr.onerror = () => { up.disabled = false; up.textContent = "Upload";
+                           toast("Couldn't read that file", true); };
+      fr.onload = () => {
+        api("/api/dash/location-image", { key: this.sel, filename: file.name,
+                                          content_type: file.type,
+                                          data: String(fr.result).split(",")[1] })
+          .then(() => { toast("Map uploaded"); this.load(); })
+          .catch(e2 => { up.disabled = false; up.textContent = "Upload";
+                         toast(e2.message, true); });
+      };
+      fr.readAsDataURL(file);
+    };
+    up.onclick = sendImg;
+    f.onchange = () => { if (f.files[0]) sendImg(); };
+  },
+};
+$("#lsearch").oninput = () => Locations.renderList();
 $("#qnew").onclick = () => { Quests.creating = true; Quests.renderEditor(); };
 
 /* ---------- boot ---------- */
