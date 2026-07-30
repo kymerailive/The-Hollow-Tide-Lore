@@ -375,9 +375,10 @@
   <div class="listpane card">
     <h2 style="margin-top:0">Team sites</h2>
     <p class="hint">One passcode-gated site per team. Changing a passcode
-    REPUBLISHES that team's site (takes ~a minute on Pages) — the old code
-    stops working as soon as the new build lands. Passcodes live in the
-    bot's .env; hand them to teams privately.</p>
+    REPUBLISHES that team's site — live on Pages in ~a minute, but browsers
+    cache the page for up to 10 minutes, so an already-open site needs a
+    <b>hard refresh (Ctrl+F5)</b> before the new code opens it. Passcodes
+    live in the bot's .env; hand them to teams privately.</p>
   </div>
   <div class="editor card" id="stedit"><p class="muted">Loading…</p></div>
 </section>
@@ -2333,7 +2334,8 @@ const Sites = {
       api("/api/dash/teamsite-passcode",
           { team: gid, passcode, author: this.author() })
         .then(j => { this.shown[gid] = true;
-                     toast("Passcode set — site republishing (~1 min on Pages)");
+                     toast("Passcode set — live in ~1 min; viewers must "
+                           + "hard-refresh (Ctrl+F5) to pick it up");
                      this.load(); })
         .catch(e2 => toast(e2.message, true));
     };
