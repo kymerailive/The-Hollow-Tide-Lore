@@ -2727,7 +2727,7 @@ $("#qnew").onclick = () => { Quests.creating = true; Quests.renderEditor(); };
 
 /* ---------- Bases: team-held strongholds — roster, houses, posture ---------- */
 const Bases = {
-  data: null, sel: null, creating: false,
+  data: null, sel: null, creating: false, houses: [], _draft: null,
   async load() {
     try { this.data = await api("/api/dash/bases"); }
     catch (e) { return; }
@@ -2740,6 +2740,7 @@ const Bases = {
              desc: "", dm: "", houses: [],
              author: localStorage.getItem("ht_author") || "" };
   },
+  npcName(k) { return (this.data.npcs || {})[k] || k; },
   renderList() {
     const q = $("#bsearch").value.trim().toLowerCase();
     const box = $("#blist");
@@ -2764,23 +2765,56 @@ const Bases = {
     if (!box.childElementCount)
       box.innerHTML = "<p class='muted'>No bases yet — author the first one.</p>";
   },
-  // Houses travel as a textarea, one per line: "House :: function :: staff".
-  parseHouses(text) {
-    return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
-      const [name, func, ...rest] = l.split("::");
-      return { name: (name || "").trim(), function: (func || "").trim(),
-               staff: rest.join("::").trim() };
-    }).filter(h => h.name);
+  formValues(it) {
+    return {
+      name: $("#bf-name").value, team: $("#bf-team").value,
+      place: $("#bf-place").value, steward: $("#bf-steward").value,
+      status: $("#bf-status").value, desc: $("#bf-desc").value,
+      dm: $("#bf-dm").value, author: $("#bf-author").value,
+      houses: this.houses.map(h => ({ name: h.name, function: h.function,
+                                      staff: h.staff, npcs: h.npcs || [] })),
+    };
   },
   renderEditor() {
     const box = $("#bedit");
-    const it = this.creating ? this.blank() : this.base();
-    if (!it) { box.innerHTML = "<p class='muted'>Select a base.</p>"; return; }
+    const saved = this.creating ? this.blank() : this.base();
+    if (!saved) { box.innerHTML = "<p class='muted'>Select a base.</p>"; return; }
+    // _draft carries unsaved typing across the re-render a hale add/remove
+    // or an NPC chip action does (same pattern as the Regions tab).
+    const it = this._draft || saved;
+    this._draft = null;
+    this.houses = (it.houses || []).map(h => ({
+      name: h.name || "", function: h.function || "",
+      staff: h.staff || "", npcs: [...(h.npcs || [])] }));
     const places = Object.entries(this.data.places)
       .sort((a, b) => a[1].localeCompare(b[1]));
-    const houseText = (it.houses || [])
-      .map(h => [h.name, h.function, h.staff].filter(Boolean).join(" :: "))
-      .join("\n");
+    const assigned = new Set(this.houses.flatMap(h => h.npcs));
+    const roster = Object.entries(this.data.npcs || {})
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    const haleCards = this.houses.map((h, i) => `
+      <div class="pcard" style="margin:10px 0;padding:12px 16px">
+        <div style="display:flex;gap:7px;align-items:center">
+          <input type="text" id="bh-name-${i}" value="${esc(h.name)}"
+                 placeholder="Hale name" style="flex:2;font-weight:700">
+          <input type="text" id="bh-func-${i}" value="${esc(h.function)}"
+                 placeholder="Function (Lookout, Comms loft…)" style="flex:3">
+          <button class="btn mini" id="bh-del-${i}" title="Remove this hale">✕</button>
+        </div>
+        <div style="margin-top:8px">${(h.npcs || []).map(k => `
+          <span class="chip">${esc(this.npcName(k))}
+            <a href="#" data-bnun="${i}:${esc(k)}" title="Unassign">✕</a></span>`).join(" ")
+          || "<span class='muted' style='font-size:12px'>No roster NPCs stationed.</span>"}
+        </div>
+        <div style="display:flex;gap:7px;margin-top:7px">
+          <select id="bh-add-${i}" style="flex:1;font-size:12px">
+            <option value="">— station an NPC here… —</option>
+            ${roster.map(([k, n]) => `<option value="${k}">${esc(n)}${assigned.has(k) ? " (moves them)" : ""}</option>`).join("")}
+          </select>
+          <input type="text" id="bh-staff-${i}" value="${esc(h.staff)}"
+                 placeholder="Other staff, free text (Waiāwī, watch crews…)"
+                 style="flex:2;font-size:12px">
+        </div>
+      </div>`).join("");
     box.innerHTML = `
       <h2>${this.creating ? "New base" : esc(it.name)}</h2>
       <div class="frm">
@@ -2807,11 +2841,17 @@ const Bases = {
         <input type="text" id="bf-status" value="${esc(it.status || "")}"
                placeholder="Open — ward checked morning and night" style="width:100%">
         <label>Description — what the base is, for anyone reading this tab</label>
-        <textarea id="bf-desc" rows="5"
+        <textarea id="bf-desc" rows="4"
           placeholder="Whose base, where it stands, what holds it together…">${esc(it.desc || "")}</textarea>
-        <label>Houses &amp; staff — one per line, <code>House :: function :: staff</code></label>
-        <textarea id="bf-houses" rows="12"
-          placeholder="Hale Kilo :: Lookout :: Oliko, Cassette&#10;The salt line :: The ward :: Hōʻailona, Konane">${esc(houseText)}</textarea>
+        <h2 style="margin-bottom:2px">Hale <span class="muted" style="font-size:12px">—
+          one card per working house; station roster NPCs with the picker
+          (assignments apply instantly on a saved base), keep flavor-only
+          names in the free-text staff box</span></h2>
+        <div id="bf-hales">${haleCards ||
+          "<p class='muted'>No hale yet — add the first one.</p>"}</div>
+        <div style="margin-top:6px">
+          <button class="btn mini" id="bf-haleadd">＋ Add hale</button>
+        </div>
         <label>DM notes — never shown to players</label>
         <textarea id="bf-dm" rows="4"
           placeholder="What this base means structurally; how it should fall if it falls…">${esc(it.dm || "")}</textarea>
@@ -2826,19 +2866,65 @@ const Bases = {
                           : '<button class="btn danger" id="bf-del">Delete…</button>'}
         </div>
       </div>`;
+    const rerender = () => { this._draft = { ...it, ...this.formValues(it) };
+                             this.renderEditor(); };
+    this.houses.forEach((h, i) => {
+      $(`#bh-name-${i}`).oninput = e => { h.name = e.target.value; };
+      $(`#bh-func-${i}`).oninput = e => { h.function = e.target.value; };
+      $(`#bh-staff-${i}`).oninput = e => { h.staff = e.target.value; };
+      $(`#bh-del-${i}`).onclick = () => {
+        if ((h.npcs || []).length &&
+            !confirm(`Remove ${h.name || "this hale"}? Its ${h.npcs.length} stationed NPC(s) become unassigned.`))
+          return;
+        this.houses.splice(i, 1);
+        rerender();
+      };
+      $(`#bh-add-${i}`).onchange = e => {
+        const k = e.target.value;
+        if (!k) return;
+        if (this.creating || !h.name.trim()) {
+          // Not saved (or unnamed) — stage locally; the save persists it.
+          this.houses.forEach(x => x.npcs = (x.npcs || []).filter(q => q !== k));
+          h.npcs.push(k);
+          rerender();
+          return;
+        }
+        api("/api/dash/base-npc", { base: it.key, npc: k, house: h.name,
+                                    author: $("#bf-author").value.trim() })
+          .then(j => { this._draft = { ...it, ...this.formValues(it),
+                                       houses: j.houses };
+                       toast(`${this.npcName(k)} → ${h.name}`);
+                       this.renderEditor(); })
+          .catch(e2 => toast(e2.message, true));
+      };
+    });
+    box.querySelectorAll("[data-bnun]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const [i, k] = a.dataset.bnun.split(/:(.+)/);
+      const h = this.houses[+i];
+      if (this.creating || !it.key) {
+        h.npcs = h.npcs.filter(q => q !== k);
+        rerender();
+        return;
+      }
+      api("/api/dash/base-npc", { base: it.key, npc: k, house: null,
+                                  author: $("#bf-author").value.trim() })
+        .then(j => { this._draft = { ...it, ...this.formValues(it),
+                                     houses: j.houses };
+                     toast(`${this.npcName(k)} unassigned`);
+                     this.renderEditor(); })
+        .catch(e2 => toast(e2.message, true));
+    });
+    $("#bf-haleadd").onclick = () => {
+      this.houses.push({ name: "", function: "", staff: "", npcs: [] });
+      rerender();
+    };
     $("#bf-save").onclick = () => {
       const author = $("#bf-author").value.trim();
       if (author) localStorage.setItem("ht_author", author);
       api("/api/dash/base", {
-        key: this.creating ? null : it.key, author,
-        name: $("#bf-name").value,
-        team: $("#bf-team").value,
-        place: $("#bf-place").value,
-        steward: $("#bf-steward").value,
-        status: $("#bf-status").value,
-        desc: $("#bf-desc").value,
-        dm: $("#bf-dm").value,
-        houses: this.parseHouses($("#bf-houses").value),
+        key: this.creating ? null : it.key,
+        ...this.formValues(it), author,
       }).then(j => {
         toast(this.creating ? "Base created" : "Base saved");
         this.creating = false;
@@ -2847,7 +2933,8 @@ const Bases = {
       }).catch(e2 => toast(e2.message, true));
     };
     if (this.creating) {
-      $("#bf-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+      $("#bf-cancel").onclick = () => { this.creating = false; this._draft = null;
+                                        this.renderEditor(); };
       return;
     }
     $("#bf-del").onclick = () => {
