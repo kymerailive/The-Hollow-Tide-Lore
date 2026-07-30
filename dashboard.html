@@ -125,6 +125,9 @@
           border: 1px solid var(--line); border-radius: 14px;
           font-size: 12px; cursor: grab; }
   .chip .swatch { width: 9px; height: 9px; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .tbl td { padding: 4px 7px; border-bottom: 1px solid var(--line);
+            vertical-align: top; }
 
   /* ---------- list + editor ---------- */
   .listpane { width: 340px; flex-shrink: 0; max-height: calc(100vh - 118px);
@@ -250,8 +253,13 @@
     <span class="tab" data-view="npcs">NPCs</span>
     <span class="tab" data-view="items">Items</span>
     <span class="tab" data-view="quests">Questlines</span>
+    <span class="tab" data-view="lines">Lines</span>
+    <span class="tab" data-view="events">Events</span>
+    <span class="tab" data-view="shops">Shops</span>
+    <span class="tab" data-view="sites">Sites</span>
     <span class="tab" data-view="regions">Regions</span>
     <span class="tab" data-view="locations">Locations</span>
+    <span class="tab" data-view="bases">Bases</span>
   </nav>
   <button id="newplacebtn" title="Add a new place to the island" style="margin-left:auto">＋ Place</button>
   <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
@@ -326,6 +334,54 @@
   <div class="editor card" id="qedit"><p class="muted">Select a questline.</p></div>
 </section>
 
+<section class="view" id="view-lines">
+  <div class="listpane card">
+    <input class="search" id="lnsearch" type="text" placeholder="Search lines…">
+    <div id="lnlist" style="margin-top:8px"></div>
+    <p class="hint" style="margin-top:8px">Live line state — the cast, the
+    running transcript the NPCs read, and scene snapshots. Edits land
+    instantly and are audited; nothing here posts to players.</p>
+  </div>
+  <div class="editor card" id="lnedit"><p class="muted">Select a line.</p></div>
+</section>
+
+<section class="view" id="view-events">
+  <div class="listpane card">
+    <input class="search" id="esearch" type="text" placeholder="Search road events…">
+    <button class="btn mini" id="enew">＋ New road event</button>
+    <div id="elist" style="margin-top:8px"></div>
+    <p class="hint" style="margin-top:8px">The pool the GPS draws from on the
+    road. File-seeded events can be edited (your save shadows the file copy)
+    or disabled — never deleted. <b>Fire…</b> drafts an event into the team's
+    -review channel; a dev ✅ posts it. Nothing fires direct.</p>
+  </div>
+  <div class="editor card" id="eedit"><p class="muted">Select a road event.</p></div>
+</section>
+
+<section class="view" id="view-shops">
+  <div class="listpane card">
+    <label>Team vendor</label>
+    <select id="shteam" style="width:100%"></select>
+    <div id="shmeta" class="hint" style="margin-top:6px"></div>
+    <p class="hint" style="margin-top:8px">The stall players see at
+    <code>/vendor</code>. Prices are computed from team wealth at buy time —
+    only stock is edited here. Below: every open marketplace listing;
+    unlisting returns the goods to the seller's bag.</p>
+  </div>
+  <div class="editor card" id="shedit"><p class="muted">Loading…</p></div>
+</section>
+
+<section class="view" id="view-sites">
+  <div class="listpane card">
+    <h2 style="margin-top:0">Team sites</h2>
+    <p class="hint">One passcode-gated site per team. Changing a passcode
+    REPUBLISHES that team's site (takes ~a minute on Pages) — the old code
+    stops working as soon as the new build lands. Passcodes live in the
+    bot's .env; hand them to teams privately.</p>
+  </div>
+  <div class="editor card" id="stedit"><p class="muted">Loading…</p></div>
+</section>
+
 <section class="view" id="view-regions">
   <div class="listpane card">
     <input class="search" id="rsearch" type="text" placeholder="Search regions…">
@@ -344,6 +400,18 @@
     __underline action__ standing there — devs still ✅ every word.</p>
   </div>
   <div class="editor card" id="ledit"><p class="muted">Select a place.</p></div>
+</section>
+
+<section class="view" id="view-bases">
+  <div class="listpane card">
+    <input class="search" id="bsearch" type="text" placeholder="Search bases…">
+    <button class="btn mini" id="bnew">＋ New base</button>
+    <div id="blist" style="margin-top:8px"></div>
+    <p class="hint" style="margin-top:8px">A base is a stronghold a team
+    holds — who runs it, its working houses and their staff, its current
+    posture. Should a new base surface, author it here.</p>
+  </div>
+  <div class="editor card" id="bedit"><p class="muted">Select a base.</p></div>
 </section>
 </main>
 
@@ -537,8 +605,13 @@ function switchView(v) {
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
   if (v === "quests") Quests.load();
+  if (v === "lines") Lines.load();
+  if (v === "events") Events.load();
+  if (v === "shops") Shops.load();
+  if (v === "sites") Sites.load();
   if (v === "regions") Regions.load();
   if (v === "locations") Locations.load();
+  if (v === "bases") Bases.load();
 }
 
 /* ================= MAP ================= */
@@ -1155,7 +1228,8 @@ const Players = {
     $("#pf-setwb").onclick = () => {
       const v = $("#pf-setw").value;
       if (v === "") return;
-      api("/api/dash/player", { id: p.id, wallet_set: parseInt(v, 10) })
+      api("/api/dash/player", { id: p.id, wallet_set: parseInt(v, 10),
+                                author: localStorage.getItem("ht_author") || "" })
         .then(() => { toast("Wallet set"); Players.load(); })
         .catch(e => toast(e.message, true));
     };
@@ -1170,7 +1244,8 @@ const Players = {
   },
   wallet(p, delta) {
     if (!delta) return;
-    api("/api/dash/player", { id: p.id, wallet_delta: delta })
+    api("/api/dash/player", { id: p.id, wallet_delta: delta,
+                              author: localStorage.getItem("ht_author") || "" })
       .then(() => { toast(`Wallet ${delta > 0 ? "+" : ""}${fmt(delta)}`); Players.load(); })
       .catch(e => toast(e.message, true));
   },
@@ -1247,7 +1322,8 @@ const Players = {
     };
     const tre = delta => {
       if (!delta) return;
-      api("/api/dash/team", { team: gid, treasury_delta: delta })
+      api("/api/dash/team", { team: gid, treasury_delta: delta,
+                              author: localStorage.getItem("ht_author") || "" })
         .then(() => { toast(`Team Bank ${delta > 0 ? "+" : ""}${fmt(delta)}`);
                       Players.load(); })
         .catch(e => toast(e.message, true));
@@ -1274,7 +1350,8 @@ const Players = {
     $("#tf-setb").onclick = () => {
       const v = $("#tf-set").value;
       if (v === "") return;
-      api("/api/dash/team", { team: gid, treasury_set: parseInt(v, 10) })
+      api("/api/dash/team", { team: gid, treasury_set: parseInt(v, 10),
+                              author: localStorage.getItem("ht_author") || "" })
         .then(() => { toast("Team Bank set"); Players.load(); })
         .catch(e => toast(e.message, true));
     };
@@ -1775,12 +1852,509 @@ const Quests = {
 };
 $("#qsearch").oninput = () => Quests.renderList();
 
+/* ================= LINES (live state) ================= */
+/* Cast, transcript, scene snapshots, and the archive ledger — the state
+   that most often needs fixing mid-session (item 3). Every write goes
+   through /api/dash/* and is audited; nothing posts to players. */
+const Lines = {
+  data: null, sel: null, arch: null,
+  author() { return localStorage.getItem("ht_author") || ""; },
+  async load() {
+    try {
+      this.data = await api("/api/dash/lines");
+      this.arch = await api("/api/dash/archives");
+    } catch (e) { return; }
+    if (this.sel && !this.data.buckets[this.sel]) this.sel = null;
+    this.renderList();
+    this.renderEditor();
+  },
+  label(bucket) {
+    const gid = bucket.split(":")[1] || "";
+    const team = this.data.teams[gid];
+    const tier = bucket.startsWith("dev:") ? " (dev)"
+      : bucket.startsWith("test:") ? " (test)" : "";
+    return (team || bucket) + tier;
+  },
+  renderList() {
+    const q = $("#lnsearch").value.trim().toLowerCase();
+    const box = $("#lnlist");
+    box.innerHTML = "";
+    const keys = Object.keys(this.data.buckets).sort((a, b) =>
+      this.label(a).localeCompare(this.label(b)));
+    for (const b of keys) {
+      const info = this.data.buckets[b];
+      const gid = b.split(":")[1] || "";
+      const open = this.data.lines[gid];
+      const hay = `${b} ${this.label(b)} ${open ? open.name : ""}`;
+      if (q && !hay.toLowerCase().includes(q)) continue;
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === b ? " sel" : "");
+      row.innerHTML = `<span class="nm">${esc(this.label(b))}</span>
+        <span class="sub">${open ? "🔗 " + esc(open.name || "open") : "no open line"}
+          · cast ${info.cast.filter(c => c.live).length}
+          · ${info.transcript_len} lines</span>`;
+      row.onclick = () => { this.sel = b; this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+    if (!box.childElementCount)
+      box.innerHTML = "<p class='muted'>No line state anywhere yet.</p>";
+  },
+  renderEditor() {
+    const box = $("#lnedit");
+    const b = this.sel, info = b && this.data.buckets[b];
+    if (!info) { box.innerHTML = "<p class='muted'>Select a line.</p>"; return; }
+    const gid = b.split(":")[1] || "";
+    const open = this.data.lines[gid];
+    const npcs = Object.entries(this.data.npcs)
+      .sort((a, c) => a[1].localeCompare(c[1]));
+    const start = info.transcript_len - info.tail.length;
+    const castChips = info.cast.map(c => `
+      <span class="chip" style="${c.live ? "" : "opacity:.45"}"
+            title="${esc(c.how || "")}${c.live ? "" : " — stale generation"}">
+        ${esc(c.name)} <a href="#" data-uncast="${esc(c.key)}">✕</a></span>`).join(" ")
+      || "<span class='muted'>Nobody staged.</span>";
+    const sceneRows = Object.entries(this.data.scenes)
+      .sort((a, c) => a[0].localeCompare(c[0])).map(([n, len]) => `
+      <tr><td>${esc(n)}</td><td class="muted">${len}</td>
+        <td style="white-space:nowrap">
+          <a href="#" data-sview="${esc(n)}">view</a> ·
+          <a href="#" data-sload="${esc(n)}">load</a> ·
+          <a href="#" data-sdel="${esc(n)}">delete</a></td></tr>`).join("");
+    const ledger = (this.arch && this.arch.archives[gid]) || [];
+    const ledgerRows = ledger.slice().reverse().map(e => `
+      <tr><td class="muted" style="font-size:11px">${
+        esc(typeof e === "object" ? Object.entries(e)
+          .map(([k, v]) => `${k}: ${v}`).join(" · ") : String(e))}</td></tr>`)
+      .join("");
+    box.innerHTML = `
+      <h2>${esc(this.label(b))} <span class="muted" style="font-size:12px">·
+        ${open ? "line “" + esc(open.name || "") + "” open" : "no open line"}
+        · gen ${info.gen} · <code>${esc(b)}</code></span></h2>
+      <div class="frm">
+        <h2>Cast</h2>
+        <div id="ln-cast">${castChips}</div>
+        <div style="display:flex;gap:7px;margin-top:7px">
+          <select id="ln-addnpc" style="flex:1">${npcs.map(([k, n]) =>
+            `<option value="${k}">${esc(n)}</option>`).join("")}</select>
+          <button class="btn mini" id="ln-adds">＋ Stage on this line</button>
+        </div>
+        <hr>
+        <h2>Transcript <span class="muted">— what the NPCs read (${info.transcript_len} lines${info.tail.length < info.transcript_len ? ", last " + info.tail.length + " shown" : ""})</span></h2>
+        <div style="max-height:320px;overflow:auto"><table class="tbl">
+          ${info.tail.map((e2, i) => `
+          <tr><td class="muted" style="width:34px">${start + i}</td>
+            <td style="width:110px">${esc(e2.speaker)}</td>
+            <td>${esc(e2.text)}</td>
+            <td style="white-space:nowrap"><a href="#" data-tedit="${start + i}">✏</a>
+              <a href="#" data-tdel="${start + i}">✕</a></td></tr>`).join("")}
+        </table></div>
+        <div class="btnrow">
+          <button class="btn danger mini" id="ln-clear">Clear transcript…</button>
+        </div>
+        <hr>
+        <h2>Scenes <span class="muted">— snapshots; load REPLACES the running transcript</span></h2>
+        <div style="display:flex;gap:7px;margin-bottom:7px">
+          <input type="text" id="ln-scenename" placeholder="snapshot name" style="flex:1">
+          <button class="btn mini" id="ln-ssave">📸 Save current as scene</button>
+        </div>
+        <div style="max-height:220px;overflow:auto"><table class="tbl">${sceneRows}</table></div>
+        <pre id="ln-sceneview" class="muted"
+             style="display:none;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+        <hr>
+        <h2>Archive ledger <span class="muted">— read-only, oldest last</span></h2>
+        ${ledgerRows ? `<div style="max-height:200px;overflow:auto">
+          <table class="tbl">${ledgerRows}</table></div>`
+          : "<p class='muted'>Nothing archived for this server.</p>"}
+      </div>`;
+    const call = (path, body2, okMsg) =>
+      api(path, { ...body2, bucket: b, author: this.author() })
+        .then(() => { if (okMsg) toast(okMsg); this.load(); })
+        .catch(e2 => toast(e2.message, true));
+    box.querySelectorAll("[data-uncast]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const k = a.dataset.uncast;
+      if (confirm(`Take ${k} off this line's cast?`))
+        call("/api/dash/line-cast", { action: "remove", npc: k }, "Removed");
+    });
+    $("#ln-adds").onclick = () =>
+      call("/api/dash/line-cast", { action: "add", npc: $("#ln-addnpc").value },
+           "Staged");
+    box.querySelectorAll("[data-tdel]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const i = +a.dataset.tdel;
+      const entry = info.tail[i - start];
+      if (confirm(`Delete line ${i}?\n${entry.speaker}: ${entry.text}`))
+        call("/api/dash/line-memory",
+             { action: "delete", index: i, expect: entry.text }, "Deleted");
+    });
+    box.querySelectorAll("[data-tedit]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const i = +a.dataset.tedit;
+      const entry = info.tail[i - start];
+      const text = prompt(`Edit line ${i} (${entry.speaker}):`, entry.text);
+      if (text !== null && text.trim())
+        call("/api/dash/line-memory",
+             { action: "edit", index: i, expect: entry.text, text }, "Edited");
+    });
+    $("#ln-clear").onclick = () => {
+      if (confirm(`Clear the ENTIRE transcript for ${this.label(b)} `
+                  + `(${info.transcript_len} lines)? The NPCs forget the scene.`))
+        call("/api/dash/line-memory", { action: "clear" }, "Cleared");
+    };
+    $("#ln-ssave").onclick = () => {
+      const name = $("#ln-scenename").value.trim();
+      if (!name) { toast("Name the snapshot first", true); return; }
+      call("/api/dash/scene", { action: "save", name }, "Scene saved");
+    };
+    box.querySelectorAll("[data-sload]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const n = a.dataset.sload;
+      if (confirm(`Load scene “${n}” onto ${this.label(b)}? This REPLACES `
+                  + "the running transcript."))
+        call("/api/dash/scene", { action: "load", name: n }, "Scene loaded");
+    });
+    box.querySelectorAll("[data-sdel]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const n = a.dataset.sdel;
+      if (confirm(`Delete scene “${n}”? This can't be undone.`))
+        call("/api/dash/scene", { action: "delete", name: n }, "Scene deleted");
+    });
+    box.querySelectorAll("[data-sview]").forEach(a => a.onclick = async ev => {
+      ev.preventDefault();
+      try {
+        const j = await api("/api/dash/scene-text?name="
+                            + encodeURIComponent(a.dataset.sview));
+        const pre = $("#ln-sceneview");
+        pre.style.display = "";
+        pre.textContent = j.entries.map(e2 =>
+          e2.speaker === "*" ? e2.text : `${e2.speaker}: ${e2.text}`).join("\n");
+      } catch (e2) { toast(e2.message, true); }
+    });
+  },
+};
+$("#lnsearch").oninput = () => Lines.renderList();
+
+/* ================= ROAD EVENTS ================= */
+/* The pool the GPS draws from (item 3). File-seeded events show with a FILE
+   badge — saving one writes a same-title shadow into bot.data, so the file
+   is never rewritten. Fire… drafts to the team's -review channel for a ✅;
+   there is no direct-fire path. */
+const Events = {
+  data: null, sel: null, creating: false,
+  async load() {
+    try { this.data = await api("/api/dash/events"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  blank() {
+    return { title: "", category: "", side: "any", weight: "common",
+             places: [], player_sees: "", dm: "", effect: "", disabled: false,
+             origin: "dash" };
+  },
+  event() { return this.data.events.find(i => i.key === this.sel); },
+  renderList() {
+    const q = $("#esearch").value.trim().toLowerCase();
+    const box = $("#elist");
+    box.innerHTML = "";
+    const rows = [...this.data.events].sort((a, b) =>
+      (a.title || "").localeCompare(b.title || ""));
+    for (const it of rows) {
+      const hay = `${it.title} ${it.category || ""} ${it.side || ""}`;
+      if (q && !hay.toLowerCase().includes(q)) continue;
+      const badge = it.origin === "file" ? " · file"
+        : it.origin === "dash-shadows-file" ? " · edited file" : "";
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === it.key ? " sel" : "");
+      row.innerHTML = `<span class="nm">${it.disabled ? "🚫 " : ""}${esc(it.title)}</span>
+        <span class="sub">${esc((it.side || "any") + " · " + (it.weight || "common") + badge)}</span>`;
+      row.onclick = () => { this.sel = it.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+    if (!box.childElementCount)
+      box.innerHTML = "<p class='muted'>No road events.</p>";
+  },
+  renderEditor() {
+    const box = $("#eedit");
+    const it = this.creating ? this.blank() : this.event();
+    if (!it) { box.innerHTML = "<p class='muted'>Select a road event.</p>"; return; }
+    const places = Object.entries(this.data.places)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    const teams = Object.entries(this.data.teams)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    const evPlaces = it.places || [];
+    box.innerHTML = `
+      <h2>${this.creating ? "New road event" : esc(it.title)}
+        ${it.origin === "file" ? '<span class="muted" style="font-size:12px"> — file-seeded (saving shadows the file)</span>' : ""}</h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Title</label>
+            <input type="text" id="ef-title" value="${esc(it.title)}"
+                   placeholder="Salt-Carriers on the Road"></div>
+          <div><label>Category</label>
+            <input type="text" id="ef-category" value="${esc(it.category || "")}"
+                   list="ef-cats" placeholder="encounter / hazard / warmth…">
+            <datalist id="ef-cats">
+              ${this.data.categories.map(c => `<option value="${esc(c)}">`).join("")}
+            </datalist></div>
+          <div><label>Side (70% draw for the matching team)</label>
+            <select id="ef-side">${this.data.sides.map(s =>
+              `<option value="${s}" ${(it.side || "any") === s ? "selected" : ""}>${s}</option>`).join("")}
+            </select></div>
+          <div><label>Weight</label>
+            <select id="ef-weight">${this.data.weights.map(w =>
+              `<option value="${w}" ${(it.weight || "common") === w ? "selected" : ""}>${w}</option>`).join("")}
+            </select></div>
+        </div>
+        <label>Places (optional — the event only fires on legs touching one;
+          Ctrl-click to toggle)</label>
+        <select id="ef-places" multiple size="6">${places.map(([k, n]) =>
+          `<option value="${k}" ${evPlaces.includes(k) ? "selected" : ""}>${esc(n)}</option>`).join("")}
+        </select>
+        <label>What the players read (player_sees)</label>
+        <textarea id="ef-sees" rows="4">${esc(it.player_sees || "")}</textarea>
+        <label>DM note (players see this too, marked <b>DM:</b>)</label>
+        <textarea id="ef-dm" rows="3">${esc(it.dm || "")}</textarea>
+        <div class="grid2">
+          <div><label>Effect (one line, italicised on the card)</label>
+            <input type="text" id="ef-effect" value="${esc(it.effect || "")}"></div>
+          <div><label style="margin-top:22px"><input type="checkbox" id="ef-disabled"
+            ${it.disabled ? "checked" : ""}> Disabled — never drawn, can't fire</label></div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" id="ef-save">${this.creating ? "Create event" : "Save event"}</button>
+          ${this.creating ? '<button class="btn" id="ef-cancel">Cancel</button>'
+            : (it.origin !== "file" ? '<button class="btn danger" id="ef-del">Delete…</button>' : "")}
+        </div>
+        <hr>
+        <h2>Fire at a team <span class="muted">— drafts to their -review; a dev ✅ posts it</span></h2>
+        <div class="grid2">
+          <div><label>Team</label><select id="ef-team">
+            ${teams.map(([g, n]) => `<option value="${g}">${esc(n)}</option>`).join("")}
+          </select></div>
+          <div><label>Place (optional flavor)</label><select id="ef-place">
+            <option value="">— on the road —</option>
+            ${places.map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("")}
+          </select></div>
+          <div><label>Your name (for the audit log)</label>
+            <input type="text" id="ef-author"
+                   value="${esc(localStorage.getItem("ht_author") || "")}"></div>
+        </div>
+        <div class="btnrow">
+          <button class="btn" id="ef-fire" ${this.creating || it.disabled ? "disabled" : ""}>🧭 Fire… (drafts for review)</button>
+        </div>
+      </div>`;
+    const vals = () => ({
+      key: this.creating ? null : it.key,
+      title: $("#ef-title").value,
+      category: $("#ef-category").value,
+      side: $("#ef-side").value,
+      weight: $("#ef-weight").value,
+      places: [...$("#ef-places").selectedOptions].map(o => o.value),
+      player_sees: $("#ef-sees").value,
+      dm: $("#ef-dm").value,
+      effect: $("#ef-effect").value,
+      disabled: $("#ef-disabled").checked,
+    });
+    $("#ef-save").onclick = () => {
+      api("/api/dash/event", vals()).then(j => {
+        toast(this.creating ? "Event created" : "Event saved");
+        this.creating = false;
+        this.sel = j.key;
+        this.load();
+      }).catch(e2 => toast(e2.message, true));
+    };
+    if (this.creating) {
+      $("#ef-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+      return;
+    }
+    const del = $("#ef-del");
+    if (del) del.onclick = () => {
+      if (!confirm(`Delete “${it.title}”?` + (it.origin === "dash-shadows-file"
+        ? " The file-seeded version stands again." : " This can't be undone.")))
+        return;
+      api("/api/dash/event-delete", { key: it.key })
+        .then(() => { toast("Deleted"); Events.sel = null; Events.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+    $("#ef-fire").onclick = () => {
+      const team = $("#ef-team").value;
+      const tn = this.data.teams[team] || team;
+      const author = $("#ef-author").value.trim();
+      if (author) localStorage.setItem("ht_author", author);
+      if (!confirm(`Draft “${it.title}” into ${tn}'s -review channel? A dev ✅ there posts it to their GPS.`))
+        return;
+      api("/api/dash/event-fire", { key: it.key, team,
+                                    place: $("#ef-place").value, author })
+        .then(() => toast(`Drafted for ${tn} — needs a ✅ in their review channel`))
+        .catch(e2 => toast(e2.message, true));
+    };
+  },
+};
+$("#esearch").oninput = () => Events.renderList();
+$("#enew").onclick = () => { Events.creating = true; Events.sel = null;
+                             Events.renderList(); Events.renderEditor(); };
+
+/* ================= SHOPS (team vendors + marketplace) ================= */
+const Shops = {
+  data: null, team: null,
+  author() { return localStorage.getItem("ht_author") || ""; },
+  async load() {
+    try { this.data = await api("/api/dash/shops"); }
+    catch (e) { return; }
+    const sel = $("#shteam");
+    const teams = Object.entries(this.data.teams)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    if (!this.team || !this.data.teams[this.team])
+      this.team = teams.length ? teams[0][0] : null;
+    sel.innerHTML = teams.map(([g, n]) =>
+      `<option value="${g}" ${g === this.team ? "selected" : ""}>${esc(n)}</option>`).join("");
+    sel.onchange = () => { this.team = sel.value; this.render(); };
+    this.render();
+  },
+  render() {
+    const box = $("#shedit");
+    if (!this.team) { box.innerHTML = "<p class='muted'>No teams.</p>"; return; }
+    const v = this.data.vendors[this.team] || { stock: [], refreshed_at: 0 };
+    $("#shmeta").textContent = v.refreshed_at
+      ? "Last stocked " + new Date(v.refreshed_at * 1000).toLocaleString()
+      : "Never stocked — it rolls when a player first opens /vendor.";
+    const stockRows = v.stock.map(i => `
+      <tr><td>${esc(i.name)}</td><td class="muted">${esc(i.rarity || "")}</td>
+        <td style="width:74px"><input type="number" min="0" max="99"
+          value="${i.qty}" data-vqty="${esc(i.key)}" style="width:60px"></td>
+        <td><a href="#" data-vdel="${esc(i.key)}">✕</a></td></tr>`).join("");
+    const mkt = this.data.marketplace.map(l => `
+      <tr><td class="muted"><code>${esc(l.id)}</code></td>
+        <td>${esc(l.item)} ×${l.qty}</td>
+        <td>${esc(String(l.price))} ea</td>
+        <td>${esc(l.seller_name || String(l.seller_id))}</td>
+        <td><a href="#" data-unlist="${esc(l.id)}">unlist ↩</a></td></tr>`).join("");
+    box.innerHTML = `
+      <h2>${esc(this.data.teams[this.team])}'s stall
+        <span class="muted">— ${v.stock.length} items</span></h2>
+      <div class="frm">
+        <div style="max-height:340px;overflow:auto"><table class="tbl">
+          ${stockRows || "<tr><td class='muted'>Empty stall.</td></tr>"}
+        </table></div>
+        <div style="display:flex;gap:7px;margin-top:8px">
+          <input type="text" id="sh-add" list="sh-items" placeholder="Add item by name…" style="flex:2">
+          <datalist id="sh-items">${this.data.items.map(n =>
+            `<option value="${esc(n)}">`).join("")}</datalist>
+          <input type="number" id="sh-addqty" min="1" max="99" value="1" style="width:70px">
+          <button class="btn mini" id="sh-addbtn">＋ Add</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn mini" id="sh-restock">🎲 Force restock (reroll the whole stall)…</button>
+        </div>
+        <hr>
+        <h2>Marketplace <span class="muted">— every open listing, oldest first</span></h2>
+        <div style="max-height:280px;overflow:auto"><table class="tbl">
+          ${mkt || "<tr><td class='muted'>No listings.</td></tr>"}
+        </table></div>
+      </div>`;
+    const call = (path, body2, msg) =>
+      api(path, { ...body2, author: this.author() })
+        .then(() => { if (msg) toast(msg); this.load(); })
+        .catch(e2 => toast(e2.message, true));
+    box.querySelectorAll("[data-vqty]").forEach(inp => inp.onchange = () =>
+      call("/api/dash/vendor", { team: this.team, action: "qty",
+                                 key: inp.dataset.vqty, qty: +inp.value },
+           "Quantity set"));
+    box.querySelectorAll("[data-vdel]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      if (confirm("Pull this item from the stall?"))
+        call("/api/dash/vendor", { team: this.team, action: "remove",
+                                   key: a.dataset.vdel }, "Pulled");
+    });
+    $("#sh-addbtn").onclick = () =>
+      call("/api/dash/vendor", { team: this.team, action: "add",
+                                 item: $("#sh-add").value,
+                                 qty: +$("#sh-addqty").value }, "Added");
+    $("#sh-restock").onclick = () => {
+      if (confirm(`Reroll ${this.data.teams[this.team]}'s ENTIRE stall? The `
+                  + "current stock is replaced."))
+        call("/api/dash/vendor", { team: this.team, action: "restock" },
+             "Restocked");
+    };
+    box.querySelectorAll("[data-unlist]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      if (confirm("Unlist this? The goods go back to the seller's bag."))
+        call("/api/dash/market-unlist", { id: a.dataset.unlist }, "Unlisted");
+    });
+  },
+};
+
+/* ================= TEAM SITES (passcodes) ================= */
+const Sites = {
+  data: null, shown: {},
+  author() { return localStorage.getItem("ht_author") || ""; },
+  async load() {
+    try { this.data = await api("/api/dash/teamsites"); }
+    catch (e) { return; }
+    this.render();
+  },
+  render() {
+    const box = $("#stedit");
+    const rows = this.data.sites.map(s => `
+      <tr><td><b>${esc(s.name)}</b><br>
+          <a href="${esc(s.url)}" target="_blank" rel="noopener"
+             style="font-size:11px">${esc(s.url)}</a></td>
+        <td style="white-space:nowrap">
+          <code id="st-pc-${s.gid}">${this.shown[s.gid]
+            ? esc(s.passcode || "(not set)") : "••••••••"}</code>
+          <a href="#" data-strev="${s.gid}" title="show/hide">👁</a></td>
+        <td style="min-width:220px">
+          <div style="display:flex;gap:6px">
+            <input type="text" id="st-new-${s.gid}" placeholder="new passcode (10+ chars)"
+                   style="flex:1" autocomplete="off">
+            <button class="btn mini" data-stset="${s.gid}">Set</button>
+            <button class="btn mini" data-stgen="${s.gid}"
+                    title="generate a long random one">🎲</button>
+          </div></td></tr>`).join("");
+    box.innerHTML = `
+      <div class="frm"><table class="tbl">
+        <thead><tr><th>Team / site</th><th>Passcode</th><th>Change it</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="hint">🎲 generates a long random passcode. Custom codes are
+      case-insensitive and ignore spaces at the gate.</p></div>`;
+    box.querySelectorAll("[data-strev]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const g = a.dataset.strev;
+      this.shown[g] = !this.shown[g];
+      this.render();
+    });
+    const change = (gid, passcode) => {
+      const team = this.data.sites.find(s => s.gid === gid);
+      if (!confirm(`Change ${team.name}'s site passcode${passcode ? "" : " to a random one"}? `
+                   + "Their site republishes and the old code stops working."))
+        return;
+      api("/api/dash/teamsite-passcode",
+          { team: gid, passcode, author: this.author() })
+        .then(j => { this.shown[gid] = true;
+                     toast("Passcode set — site republishing (~1 min on Pages)");
+                     this.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+    box.querySelectorAll("[data-stset]").forEach(b => b.onclick = () => {
+      const v = $("#st-new-" + b.dataset.stset).value.trim();
+      if (!v) { toast("Type a passcode, or use 🎲 to generate one", true); return; }
+      change(b.dataset.stset, v);
+    });
+    box.querySelectorAll("[data-stgen]").forEach(b => b.onclick = () =>
+      change(b.dataset.stgen, ""));
+  },
+};
+
 /* ================= REGION DISPLAYS ================= */
-/* The standing card for a place — what /region posts to a line. The five stat
-   fields come from the bot so the editor, the preview and the embed can never
-   drift apart. */
+/* The standing card for a place — what /region posts to a line. Fields are a
+   REPEATABLE label/value list (item 7): the bot seeds the classic five on
+   old records and hands them back normalized, so the editor, the preview and
+   the embed can never drift apart. Capped at Discord's 25-field embed limit
+   (data.field_max) — the UI stops rather than letting a send fail. */
 const Regions = {
-  data: null, sel: null, creating: false, imgUrl: null,
+  data: null, sel: null, creating: false, imgUrl: null, flds: [], _draft: null,
   async load() {
     try { this.data = await api("/api/dash/regions"); }
     catch (e) { return; }
@@ -1788,10 +2362,15 @@ const Regions = {
     this.renderEditor();
   },
   blank() {
-    const r = { name: "", desc: "", place: "", image: "",
-                author: localStorage.getItem("ht_author") || "" };
-    this.data.fields.forEach(f => r[f.key] = "");
-    return r;
+    return { name: "", desc: "", place: "", image: "",
+             author: localStorage.getItem("ht_author") || "",
+             fields: this.data.fields.map(f =>
+               ({ label: `${f.emoji} ${f.label}`, value: "" })) };
+  },
+  fieldMax() { return this.data.field_max || 25; },
+  sub(it) {
+    const first = (it.fields || []).find(f => (f.value || "").trim());
+    return first ? first.value : "unclaimed";
   },
   renderList() {
     const q = $("#rsearch").value.trim().toLowerCase();
@@ -1799,12 +2378,13 @@ const Regions = {
     box.innerHTML = "";
     const rows = [...this.data.regions].sort((a, b) => a.name.localeCompare(b.name));
     for (const it of rows) {
-      if (q && !(it.name + " " + (it.sovereignty || "")).toLowerCase().includes(q))
+      const hay = it.name + " " + (it.fields || []).map(f => f.value).join(" ");
+      if (q && !hay.toLowerCase().includes(q))
         continue;
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === it.key ? " sel" : "");
       row.innerHTML = `<span class="nm">${esc(it.name)}</span>
-        <span class="sub">${esc(it.sovereignty || "unclaimed")}</span>`;
+        <span class="sub">${esc(this.sub(it))}</span>`;
       row.onclick = () => { this.sel = it.key; this.creating = false;
                             this.renderList(); this.renderEditor(); };
       box.appendChild(row);
@@ -1814,17 +2394,18 @@ const Regions = {
   },
   region() { return this.data.regions.find(i => i.key === this.sel); },
   // Read the form rather than the saved record, so the preview tracks typing.
+  // The field rows live in this.flds, synced oninput.
   formValues(it) {
     const v = { name: $("#rf-name").value, desc: $("#rf-desc").value,
-                image: $("#rf-image").value };
-    this.data.fields.forEach(f => v[f.key] = $("#rf-" + f.key).value);
+                image: $("#rf-image").value,
+                fields: this.flds.map(f => ({ label: f.label, value: f.value })) };
     v.local_image = it.local_image || "";
     return v;
   },
   previewHtml(r) {
-    const fields = this.data.fields.map(f => `
-      <div class="rp-f"><div class="rp-fn">${f.emoji} ${esc(f.label)}</div>
-        <div class="rp-fv">${esc(r[f.key] || "Unknown")}</div></div>`).join("");
+    const fields = (r.fields || []).map(f => `
+      <div class="rp-f"><div class="rp-fn">${esc(f.label || "—")}</div>
+        <div class="rp-fv">${esc(f.value || "Unknown")}</div></div>`).join("");
     const img = r.image ? `<img class="rp-img" src="${esc(r.image)}" alt="">`
       : (this.imgUrl ? `<img class="rp-img" src="${this.imgUrl}" alt="">`
                      : `<div class="rp-noimg">No map image yet — paste a URL or
@@ -1850,10 +2431,24 @@ const Regions = {
   },
   renderEditor() {
     const box = $("#redit");
-    const it = this.creating ? this.blank() : this.region();
-    if (!it) { box.innerHTML = "<p class='muted'>Select a region display.</p>"; return; }
+    const saved = this.creating ? this.blank() : this.region();
+    if (!saved) { box.innerHTML = "<p class='muted'>Select a region display.</p>"; return; }
+    // _draft carries unsaved typing across the re-render an add/remove does.
+    const it = this._draft || saved;
+    this._draft = null;
+    // Working copy of the field rows — add/remove re-renders from here.
+    this.flds = (it.fields || []).map(f => ({ label: f.label || "",
+                                              value: f.value || "" }));
     const places = Object.entries(this.data.places)
       .sort((a, b) => a[1].localeCompare(b[1]));
+    const fieldRows = this.flds.map((f, i) => `
+          <div class="rfrow" style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="rf-fl-${i}" value="${esc(f.label)}"
+                   placeholder="🗺️ Label" style="flex:2">
+            <input type="text" id="rf-fv-${i}" value="${esc(f.value)}"
+                   placeholder="Unknown" style="flex:3">
+            <button class="btn mini" id="rf-fx-${i}" title="Remove this field">✕</button>
+          </div>`).join("");
     box.innerHTML = `
       <h2>${this.creating ? "New region display" : esc(it.name)}</h2>
       <div class="frm">
@@ -1866,12 +2461,17 @@ const Regions = {
             ${places.map(([k, n]) =>
               `<option value="${k}" ${it.place === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
           </select></div>
-          ${this.data.fields.map(f => `
-          <div><label>${f.emoji} ${esc(f.label)}</label>
-            <input type="text" id="rf-${f.key}" value="${esc(it[f.key] || "")}"
-                   placeholder="Unknown"></div>`).join("")}
           <div><label>Your name (for the audit log)</label>
             <input type="text" id="rf-author" value="${esc(it.author || "")}"></div>
+        </div>
+        <label>Stat fields — label + value, in card order</label>
+        <div id="rf-fields" style="display:flex;flex-direction:column;gap:6px">
+          ${fieldRows}
+        </div>
+        <div style="margin-top:6px">
+          <button class="btn mini" id="rf-fadd"
+                  ${this.flds.length >= this.fieldMax() ? "disabled" : ""}>＋ Add field</button>
+          <span class="hint">${this.flds.length}/${this.fieldMax()} — Discord caps a card at ${this.fieldMax()} fields</span>
         </div>
         <label>Description — the paragraph under the title</label>
         <textarea id="rf-desc" rows="4">${esc(it.desc || "")}</textarea>
@@ -1897,9 +2497,26 @@ const Regions = {
         <h2>Preview <span class="muted">— what <code>/region</code> posts</span></h2>
         <div id="rf-preview" style="margin-top:8px"></div>
       </div>`;
-    // Live preview: every field repaints as it's typed.
-    ["rf-name", "rf-desc", "rf-image", ...this.data.fields.map(f => "rf-" + f.key)]
+    // Live preview: every input repaints as it's typed; field rows also sync
+    // the working copy so add/remove re-renders never lose typing.
+    ["rf-name", "rf-desc", "rf-image"]
       .forEach(id => $("#" + id).oninput = () => this.repaint(it));
+    const rerender = () => {
+      this._draft = { ...it, ...this.formValues(it),
+                      author: $("#rf-author").value,
+                      place: $("#rf-place").value };
+      this.renderEditor();
+    };
+    this.flds.forEach((f, i) => {
+      $("#rf-fl-" + i).oninput = e => { f.label = e.target.value; this.repaint(it); };
+      $("#rf-fv-" + i).oninput = e => { f.value = e.target.value; this.repaint(it); };
+      $("#rf-fx-" + i).onclick = () => { this.flds.splice(i, 1); rerender(); };
+    });
+    $("#rf-fadd").onclick = () => {
+      if (this.flds.length >= this.fieldMax()) return;
+      this.flds.push({ label: "", value: "" });
+      rerender();
+    };
     this.imgUrl = null;
     this.repaint(it);
     if (!this.creating && it.local_image && !it.image)
@@ -1980,6 +2597,7 @@ const Locations = {
       if (q && !name.toLowerCase().includes(q)) continue;
       const rec = this.data.locations[key];
       const bits = [];
+      if (rec && rec.draft) bits.push("📝 DRAFT");
       if (rec && rec.lore) bits.push("lore");
       if (rec && (rec.interactables || []).length)
         bits.push(`${rec.interactables.length} interactable${rec.interactables.length === 1 ? "" : "s"}`);
@@ -2042,6 +2660,9 @@ const Locations = {
         <div class="grid2" style="margin-top:8px">
           <div><label>Your name (for the audit log)</label>
             <input type="text" id="lf-author" value="${esc(it.author || "")}"></div>
+          <div><label style="margin-top:22px"><input type="checkbox" id="lf-draft"
+            ${it.draft ? "checked" : ""}> 📝 Draft — unreviewed; grounds NO
+            narration until unticked</label></div>
         </div>
         ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
         <div class="btnrow">
@@ -2062,6 +2683,7 @@ const Locations = {
         lore: $("#lf-lore").value,
         image: $("#lf-image").value.trim(),
         interactables: this.parseInteractables($("#lf-inter").value),
+        draft: $("#lf-draft").checked,
       }).then(() => { toast("Location sheet saved"); this.load(); })
         .catch(e2 => toast(e2.message, true));
     };
@@ -2102,6 +2724,144 @@ const Locations = {
 };
 $("#lsearch").oninput = () => Locations.renderList();
 $("#qnew").onclick = () => { Quests.creating = true; Quests.renderEditor(); };
+
+/* ---------- Bases: team-held strongholds — roster, houses, posture ---------- */
+const Bases = {
+  data: null, sel: null, creating: false,
+  async load() {
+    try { this.data = await api("/api/dash/bases"); }
+    catch (e) { return; }
+    this.renderList();
+    this.renderEditor();
+  },
+  base() { return this.data.bases.find(b => b.key === this.sel); },
+  blank() {
+    return { name: "", team: "", place: "", steward: "", status: "",
+             desc: "", dm: "", houses: [],
+             author: localStorage.getItem("ht_author") || "" };
+  },
+  renderList() {
+    const q = $("#bsearch").value.trim().toLowerCase();
+    const box = $("#blist");
+    box.innerHTML = "";
+    const rows = [...this.data.bases].sort((a, b) => a.name.localeCompare(b.name));
+    for (const it of rows) {
+      if (q && !(it.name + " " + (it.team || "") + " " + (it.steward || ""))
+            .toLowerCase().includes(q))
+        continue;
+      const bits = [];
+      if (it.team) bits.push(it.team);
+      if ((it.houses || []).length)
+        bits.push(`${it.houses.length} house${it.houses.length === 1 ? "" : "s"}`);
+      const row = document.createElement("div");
+      row.className = "lrow" + (this.sel === it.key ? " sel" : "");
+      row.innerHTML = `<span class="nm">${esc(it.name)}</span>
+        <span class="sub">${esc(bits.join(" · "))}</span>`;
+      row.onclick = () => { this.sel = it.key; this.creating = false;
+                            this.renderList(); this.renderEditor(); };
+      box.appendChild(row);
+    }
+    if (!box.childElementCount)
+      box.innerHTML = "<p class='muted'>No bases yet — author the first one.</p>";
+  },
+  // Houses travel as a textarea, one per line: "House :: function :: staff".
+  parseHouses(text) {
+    return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      const [name, func, ...rest] = l.split("::");
+      return { name: (name || "").trim(), function: (func || "").trim(),
+               staff: rest.join("::").trim() };
+    }).filter(h => h.name);
+  },
+  renderEditor() {
+    const box = $("#bedit");
+    const it = this.creating ? this.blank() : this.base();
+    if (!it) { box.innerHTML = "<p class='muted'>Select a base.</p>"; return; }
+    const places = Object.entries(this.data.places)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    const houseText = (it.houses || [])
+      .map(h => [h.name, h.function, h.staff].filter(Boolean).join(" :: "))
+      .join("\n");
+    box.innerHTML = `
+      <h2>${this.creating ? "New base" : esc(it.name)}</h2>
+      <div class="frm">
+        <div class="grid2">
+          <div><label>Name</label>
+            <input type="text" id="bf-name" value="${esc(it.name)}"
+                   placeholder="Final Measure"></div>
+          <div><label>Held by (team or faction)</label>
+            <input type="text" id="bf-team" value="${esc(it.team || "")}"
+                   list="bf-teamlist" placeholder="Reprise">
+            <datalist id="bf-teamlist">
+              ${this.data.teams.map(t => `<option value="${esc(t)}">`).join("")}
+            </datalist></div>
+          <div><label>Place on the map (optional)</label><select id="bf-place">
+            <option value="">— not tied to a map place —</option>
+            ${places.map(([k, n]) =>
+              `<option value="${k}" ${it.place === k ? "selected" : ""}>${esc(n)}</option>`).join("")}
+          </select></div>
+          <div><label>Steward — who speaks for the house</label>
+            <input type="text" id="bf-steward" value="${esc(it.steward || "")}"
+                   placeholder="Melia"></div>
+        </div>
+        <label>Status — the base's current posture (lockdown, open, rebuilding…)</label>
+        <input type="text" id="bf-status" value="${esc(it.status || "")}"
+               placeholder="Open — ward checked morning and night" style="width:100%">
+        <label>Description — what the base is, for anyone reading this tab</label>
+        <textarea id="bf-desc" rows="5"
+          placeholder="Whose base, where it stands, what holds it together…">${esc(it.desc || "")}</textarea>
+        <label>Houses &amp; staff — one per line, <code>House :: function :: staff</code></label>
+        <textarea id="bf-houses" rows="12"
+          placeholder="Hale Kilo :: Lookout :: Oliko, Cassette&#10;The salt line :: The ward :: Hōʻailona, Konane">${esc(houseText)}</textarea>
+        <label>DM notes — never shown to players</label>
+        <textarea id="bf-dm" rows="4"
+          placeholder="What this base means structurally; how it should fall if it falls…">${esc(it.dm || "")}</textarea>
+        <div class="grid2" style="margin-top:8px">
+          <div><label>Your name (for the audit log)</label>
+            <input type="text" id="bf-author" value="${esc(it.author || "")}"></div>
+        </div>
+        ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
+        <div class="btnrow">
+          <button class="btn primary" id="bf-save">${this.creating ? "Create base" : "Save base"}</button>
+          ${this.creating ? '<button class="btn" id="bf-cancel">Cancel</button>'
+                          : '<button class="btn danger" id="bf-del">Delete…</button>'}
+        </div>
+      </div>`;
+    $("#bf-save").onclick = () => {
+      const author = $("#bf-author").value.trim();
+      if (author) localStorage.setItem("ht_author", author);
+      api("/api/dash/base", {
+        key: this.creating ? null : it.key, author,
+        name: $("#bf-name").value,
+        team: $("#bf-team").value,
+        place: $("#bf-place").value,
+        steward: $("#bf-steward").value,
+        status: $("#bf-status").value,
+        desc: $("#bf-desc").value,
+        dm: $("#bf-dm").value,
+        houses: this.parseHouses($("#bf-houses").value),
+      }).then(j => {
+        toast(this.creating ? "Base created" : "Base saved");
+        this.creating = false;
+        this.sel = j.key;
+        this.load();
+      }).catch(e2 => toast(e2.message, true));
+    };
+    if (this.creating) {
+      $("#bf-cancel").onclick = () => { this.creating = false; this.renderEditor(); };
+      return;
+    }
+    $("#bf-del").onclick = () => {
+      if (!confirm(`Delete the base “${it.name}”? This can't be undone.`))
+        return;
+      api("/api/dash/base-delete", { key: it.key })
+        .then(() => { toast("Deleted"); Bases.sel = null; Bases.load(); })
+        .catch(e2 => toast(e2.message, true));
+    };
+  },
+};
+$("#bsearch").oninput = () => Bases.renderList();
+$("#bnew").onclick = () => { Bases.creating = true; Bases.sel = null;
+                             Bases.renderList(); Bases.renderEditor(); };
 
 /* ---------- boot ---------- */
 $("#cfgbtn").onclick = openGate;
