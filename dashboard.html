@@ -6,81 +6,112 @@
 <title>LNK Mini — Dev Dashboard</title>
 <style>
   :root {
-    --bg: #0f1217; --bg2: #131720; --panel: #191e28; --panel2: #1f2531;
-    --line: #2a3140; --line2: #343c4e;
-    --text: #e7ebf3; --dim: #98a2b6; --faint: #6c7689;
-    --accent: #5fc077; --accent-ink: #0e2417;
-    --gold: #d9a441; --danger: #e0697a; --danger-bg: #38222a;
-    --radius: 12px;
+    --bg: #0a0c15; --bg2: #0e1120; --panel: #151928; --panel2: #1b2036;
+    --line: #252b45; --line2: #303757;
+    --text: #e9ecf8; --dim: #8f97b3; --faint: #646d8c;
+    --accent: #7c5cff; --accent2: #4dc3ff; --accent-ink: #ffffff;
+    --grad: linear-gradient(135deg, #7c5cff, #4dc3ff);
+    --gold: #f0b34c; --danger: #ff6b81; --danger-bg: #3a2030;
+    --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; }
-  html { scrollbar-color: #333c4d var(--bg); }
-  body { background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 240px);
-         color: var(--text); min-height: 100vh;
+  html { scrollbar-color: #2d3452 var(--bg); }
+  body { color: var(--text); min-height: 100vh;
+         background: radial-gradient(1100px 640px at 88% -12%, #1b1f3d 0%, var(--bg) 55%),
+                     radial-gradient(900px 600px at -10% 112%, #131832 0%, var(--bg) 60%), var(--bg);
          font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   ::-webkit-scrollbar { width: 9px; height: 9px; }
-  ::-webkit-scrollbar-thumb { background: #333c4d; border-radius: 5px;
+  ::-webkit-scrollbar-thumb { background: #2d3452; border-radius: 5px;
                               border: 2px solid var(--bg); }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  /* ---------- header ---------- */
-  header { position: sticky; top: 0; z-index: 60; display: flex;
-           align-items: center; gap: 16px; padding: 11px 20px;
-           background: color-mix(in srgb, var(--bg2) 88%, transparent);
-           backdrop-filter: blur(10px);
-           border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 15px; letter-spacing: .3px; font-weight: 700; }
-  header h1 span { color: var(--dim); font-weight: 500; }
-  header .tabs { display: flex; gap: 2px; background: var(--panel);
-                 border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
-  header .tab { padding: 5px 14px; border-radius: 7px; color: var(--dim);
-                cursor: pointer; user-select: none; font-weight: 500;
-                transition: color .12s, background .12s; }
-  header .tab:hover { color: var(--text); }
-  header .tab.active { background: var(--panel2); color: var(--text);
-                       box-shadow: inset 0 0 0 1px var(--line2); }
-  #arrangebtn, #newplacebtn { background: none;
+  /* ---------- shell: sidebar + main column ---------- */
+  #shell { display: grid; grid-template-columns: 212px minmax(0, 1fr);
+           min-height: 100vh; }
+  #side { position: sticky; top: 0; height: 100vh; display: flex;
+          flex-direction: column; padding: 16px 12px 12px;
+          background: linear-gradient(180deg, #10131f, #0a0c15);
+          border-right: 1px solid var(--line); z-index: 70; }
+  #side .brand { display: flex; align-items: center; gap: 10px;
+                 padding: 2px 8px 14px; font-weight: 800; font-size: 14.5px;
+                 letter-spacing: .2px; white-space: nowrap; }
+  #side .brand .logo { width: 30px; height: 30px; border-radius: 9px;
+                       background: var(--grad); display: flex; flex-shrink: 0;
+                       align-items: center; justify-content: center;
+                       font-size: 15px; box-shadow: 0 4px 14px rgba(124,92,255,.4); }
+  #side .brand .bn small { display: block; color: var(--faint); font-size: 10px;
+                           font-weight: 600; letter-spacing: .8px; }
+  #side nav { display: flex; flex-direction: column; gap: 3px; flex: 1;
+              overflow-y: auto; padding-bottom: 8px; }
+  #side .tab { display: flex; align-items: center; gap: 11px; padding: 8px 11px;
+               border-radius: 11px; color: var(--dim); cursor: pointer;
+               font-weight: 600; font-size: 13px; user-select: none;
+               transition: color .13s, background .13s; white-space: nowrap; }
+  #side .tab .ic { width: 20px; text-align: center; font-size: 15px;
+                   flex-shrink: 0; }
+  #side .tab:hover { color: var(--text); background: rgba(255,255,255,.045); }
+  #side .tab.active { background: var(--grad); color: #fff;
+                      box-shadow: 0 5px 16px rgba(124,92,255,.32); }
+  #sidefoot { padding: 10px 6px 2px; border-top: 1px solid var(--line);
+              display: flex; flex-direction: column; gap: 8px; }
+  #maincol { min-width: 0; display: flex; flex-direction: column; }
+  @media (max-width: 940px) {
+    #shell { grid-template-columns: 58px minmax(0, 1fr); }
+    #side { padding: 12px 8px; }
+    #side .tab { justify-content: center; padding: 9px 6px; }
+    #side .tab .lb, #side .brand .bn, #sidefoot .hint { display: none; }
+    #side .brand { justify-content: center; padding-bottom: 10px; }
+  }
+
+  /* ---------- topbar ---------- */
+  #topbar { position: sticky; top: 0; z-index: 60; display: flex;
+            align-items: center; gap: 12px; padding: 12px 22px;
+            background: color-mix(in srgb, var(--bg) 80%, transparent);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--line); }
+  #pagetitle { font-size: 16.5px; font-weight: 800; letter-spacing: .2px; }
+  #pagetitle small { color: var(--faint); font-weight: 500; font-size: 12px;
+                     margin-left: 10px; }
+  #arrangebtn, #newplacebtn, #cfgbtn { background: none;
                 border: 1px solid var(--line2); color: var(--dim);
-                border-radius: 8px; padding: 5px 13px; font: inherit;
+                border-radius: 9px; padding: 5px 13px; font: inherit;
                 font-size: 13px; cursor: pointer; transition: all .12s; }
-  #newplacebtn:hover { color: var(--text); border-color: var(--faint); }
-  #arrangebtn:hover { color: var(--text); border-color: var(--faint); }
-  #cfgbtn { background: none; border: 1px solid var(--line2); color: var(--dim);
-            border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 13px;
-            cursor: pointer; transition: all .12s; }
-  #cfgbtn:hover { color: var(--text); border-color: var(--faint); }
+  #newplacebtn:hover, #arrangebtn:hover, #cfgbtn:hover {
+                color: var(--text); border-color: var(--faint); }
+  #cfgbtn { padding: 5px 10px; }
   #arrangebtn.on { border-color: var(--gold); color: var(--gold);
-                   background: rgba(217,164,65,.08); }
+                   background: rgba(240,179,76,.08); }
   body.arrange .place .dot { outline: 2px dashed var(--gold);
                              outline-offset: 2px; cursor: grab; }
-  #status { margin-left: 4px; color: var(--dim); font-size: 12px;
+  #status { color: var(--dim); font-size: 12px;
             display: inline-flex; align-items: center; gap: 6px; }
   #status.live::before { content: ""; width: 7px; height: 7px;
-            border-radius: 50%; background: var(--accent);
-            box-shadow: 0 0 6px var(--accent); animation: livepulse 2.4s infinite; }
+            border-radius: 50%; background: #5ce08a; flex-shrink: 0;
+            box-shadow: 0 0 6px #5ce08a; animation: livepulse 2.4s infinite; }
   @keyframes livepulse { 50% { opacity: .45; } }
 
-  main { padding: 16px 20px 28px; }
+  main { padding: 16px 22px 30px; }
   .view { display: none; }
   .view.active { display: flex; align-items: flex-start; gap: 16px; }
 
   /* ---------- cards ---------- */
-  .card { background: var(--panel); border: 1px solid var(--line);
+  .card { background: linear-gradient(180deg, var(--panel2) 0%, var(--panel) 130px);
+          border: 1px solid var(--line);
           border-radius: var(--radius); padding: 14px 16px;
-          box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+          box-shadow: 0 4px 16px rgba(0,0,0,.28); }
   .card h2 { display: flex; align-items: center; gap: 8px; font-size: 11.5px;
              text-transform: uppercase; letter-spacing: 1px;
              color: var(--dim); margin-bottom: 10px; font-weight: 700; }
   .card h2::before { content: ""; width: 3px; height: 12px; border-radius: 2px;
-                     background: var(--accent); flex-shrink: 0; }
+                     background: var(--grad); flex-shrink: 0; }
   hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0 14px; }
   .hint, .muted { color: var(--dim); font-size: 12.5px; line-height: 1.5; }
 
   /* ---------- map view ---------- */
   #mapwrap { position: relative; flex: 1; min-width: 0;
              border: 1px solid var(--line); border-radius: var(--radius);
-             overflow: hidden; background: #0b0e13; touch-action: none;
-             box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+             overflow: hidden; background: #0a0d18; touch-action: none;
+             box-shadow: 0 8px 24px rgba(0,0,0,.4); }
   #zoomer { position: absolute; inset: 0; transform-origin: 0 0; }
   #zoomer img { display: block; width: 100%; height: auto;
                 user-select: none; -webkit-user-drag: none; }
@@ -95,7 +126,7 @@
                 bottom: 16px; white-space: nowrap; font-size: 11px;
                 font-weight: 600; color: #1e1408;
                 text-shadow: 0 0 3px #f6f1dc, 0 0 3px #f6f1dc, 0 0 4px #f6f1dc; }
-  .place.droptarget .dot { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .place.droptarget .dot { outline: 3px solid var(--accent2); outline-offset: 2px; }
   .pawn { position: absolute; width: 17px; height: 17px; border-radius: 50%;
           border: 2px solid #fff;
           transform: translate(-50%, -50%) scale(var(--inv, 1));
@@ -113,7 +144,7 @@
   .teamrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px;
              border-radius: 8px; cursor: pointer; transition: background .1s; }
   .teamrow:hover { background: var(--panel2); }
-  .teamrow.armed { background: rgba(95,192,119,.1);
+  .teamrow.armed { background: rgba(124,92,255,.12);
                    outline: 1px solid var(--accent); }
   .swatch { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
             box-shadow: 0 0 0 2px rgba(255,255,255,.08); }
@@ -136,13 +167,13 @@
             overflow-y: auto; }
   .search { width: 100%; margin-bottom: 9px; }
   input, select, textarea {
-    background: #10141b; color: var(--text); border: 1px solid var(--line2);
-    border-radius: 8px; padding: 7px 10px; font: inherit;
+    background: #0d1020; color: var(--text); border: 1px solid var(--line2);
+    border-radius: 9px; padding: 7px 10px; font: inherit;
     transition: border-color .12s, box-shadow .12s; }
   input::placeholder, textarea::placeholder { color: var(--faint); }
   input:focus, select:focus, textarea:focus {
     outline: none; border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(95,192,119,.15); }
+    box-shadow: 0 0 0 3px rgba(124,92,255,.18); }
   input[type=checkbox] { width: auto; accent-color: var(--accent); }
   textarea { width: 100%; resize: vertical; line-height: 1.5; }
   .frm label { display: block; font-size: 10.5px; text-transform: uppercase;
@@ -152,9 +183,9 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
   .lrow { display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-          border-radius: 8px; cursor: pointer; transition: background .1s; }
+          border-radius: 9px; cursor: pointer; transition: background .1s; }
   .lrow:hover { background: var(--panel2); }
-  .lrow.sel { background: rgba(95,192,119,.1);
+  .lrow.sel { background: rgba(124,92,255,.13);
               outline: 1px solid var(--accent); }
   .lrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
               white-space: nowrap; }
@@ -171,11 +202,11 @@
         font-size: 11px; font-weight: 600; letter-spacing: .2px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         flex-shrink: 0; }
-  .fx.damage  { color: #f0a191; background: rgba(224,105,90,.14); }
-  .fx.heal    { color: #8fdba2; background: rgba(95,192,119,.14); }
+  .fx.damage  { color: #f0a191; background: rgba(255,107,129,.14); }
+  .fx.heal    { color: #8fdba2; background: rgba(92,224,138,.14); }
   .fx.status  { color: #a3bbe8; background: rgba(104,142,219,.14); }
   .fx.ooc     { color: #8fd8d2; background: rgba(88,190,182,.13); }
-  .fx.special { color: #e2c188; background: rgba(217,164,65,.13); }
+  .fx.special { color: #e2c188; background: rgba(240,179,76,.13); }
   .fx.flavor  { color: var(--faint); background: var(--panel2); }
   /* Never rolled by a restock or a box — granted deliberately or not at all. */
   .fx.norolltag { color: #d9a1b4; background: rgba(200,90,125,.14);
@@ -183,19 +214,20 @@
   .badge { font-size: 10px; padding: 2.5px 8px; border-radius: 10px;
            background: var(--panel2); color: var(--dim); font-weight: 600;
            letter-spacing: .3px; }
-  .badge.on { color: #8fdba2; background: rgba(95,192,119,.12); }
-  .badge.off { color: #e2b98c; background: rgba(217,164,65,.10); }
+  .badge.on { color: #8fdba2; background: rgba(92,224,138,.12); }
+  .badge.off { color: #e2b98c; background: rgba(240,179,76,.10); }
   .badge.dead { color: var(--danger); background: var(--danger-bg); }
-  .btn { padding: 7px 15px; border-radius: 8px; border: 1px solid var(--line2);
+  .btn { padding: 7px 15px; border-radius: 9px; border: 1px solid var(--line2);
          cursor: pointer; background: var(--panel2); color: var(--text);
          font: inherit; font-weight: 500; transition: all .12s; }
   .btn:hover { border-color: var(--faint); filter: brightness(1.12); }
   .btn:active { transform: translateY(1px); }
-  .btn.primary { background: var(--accent); border-color: var(--accent);
-                 color: var(--accent-ink); font-weight: 700; }
+  .btn.primary { background: var(--grad); border-color: transparent;
+                 color: var(--accent-ink); font-weight: 700;
+                 box-shadow: 0 4px 14px rgba(124,92,255,.3); }
   .btn.danger { background: var(--danger-bg); color: var(--danger);
                 border-color: #7c3a47; }
-  .btn.mini { padding: 2px 10px; font-size: 12px; border-radius: 6px; }
+  .btn.mini { padding: 2px 10px; font-size: 12px; border-radius: 7px; }
   .btnrow { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
             align-items: center; }
   .invrow { display: flex; align-items: center; gap: 7px; padding: 4px 0;
@@ -208,22 +240,159 @@
   .memrow:last-of-type { border-bottom: 0; }
   .memrow .t { flex: 1; line-height: 1.45; }
 
+  /* ---------- overview ---------- */
+  #view-overview.active { display: flex; flex-direction: column; gap: 16px; }
+  .statrow { display: grid; gap: 14px;
+             grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+  .tile { position: relative; overflow: hidden; padding: 15px 18px 13px;
+          background: linear-gradient(180deg, var(--panel2), var(--panel));
+          border: 1px solid var(--line); border-radius: 16px;
+          box-shadow: 0 4px 16px rgba(0,0,0,.28); }
+  .tile .k { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
+             color: var(--dim); font-weight: 700; }
+  .tile .v { font-size: 27px; font-weight: 800; line-height: 1.25;
+             background: var(--grad); -webkit-background-clip: text;
+             background-clip: text; color: transparent; }
+  .tile.goldv .v { background: none; color: var(--gold); }
+  .tile .sub { font-size: 11.5px; color: var(--faint); }
+  .tile .spark { position: absolute; right: 12px; bottom: 10px; opacity: .95; }
+  .ovcols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px;
+            align-items: start; }
+  @media (max-width: 1100px) { .ovcols { grid-template-columns: 1fr; } }
+  .lbrow { display: flex; align-items: center; gap: 10px; padding: 7px 4px;
+           border-bottom: 1px dotted var(--line); }
+  .lbrow:last-of-type { border-bottom: 0; }
+  .lbrow .rank { width: 22px; text-align: center; font-weight: 800;
+                 color: var(--faint); font-size: 12px; flex-shrink: 0; }
+  .lbrow.top .rank { color: var(--gold); }
+  .lbrow .av { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+               background: var(--grad); display: flex; align-items: center;
+               justify-content: center; font-size: 11px; font-weight: 800;
+               color: #fff; }
+  .lbrow .who { flex: 1; min-width: 0; }
+  .lbrow .who .nm { font-weight: 600; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+  .lbrow .who .tm { font-size: 11px; color: var(--faint); }
+  .lbrow .n { font-weight: 800; color: var(--accent2);
+              font-variant-numeric: tabular-nums; }
+  .linerow { padding: 8px 2px; border-bottom: 1px dotted var(--line); }
+  .linerow:last-of-type { border-bottom: 0; }
+  .linerow .top { display: flex; align-items: baseline; gap: 8px; }
+  .linerow .tm { font-weight: 600; flex: 1; min-width: 0; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+  .linerow .n { font-size: 12px; color: var(--dim);
+                font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .linerow .n b { color: var(--accent2); }
+  .bars { display: flex; gap: 3px; align-items: flex-end; height: 30px;
+          margin-top: 5px; }
+  .bars i { display: block; flex: 1; max-width: 14px;
+            background: var(--grad); border-radius: 2px 2px 0 0;
+            min-height: 2px; opacity: .9; }
+  .bars i.zero { background: var(--line); opacity: .6; }
+  .widgets { display: grid; gap: 12px;
+             grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  .widget { padding: 13px 15px; border: 1px solid var(--line);
+            border-radius: 14px; cursor: pointer;
+            background: linear-gradient(180deg, var(--panel2), var(--panel));
+            transition: transform .13s, border-color .13s; }
+  .widget:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .widget .ichead { display: flex; align-items: center; gap: 8px; }
+  .widget .ic { font-size: 17px; }
+  .widget .t { font-size: 10.5px; text-transform: uppercase;
+               letter-spacing: .8px; color: var(--dim); font-weight: 700; }
+  .widget .n { font-size: 21px; font-weight: 800; margin-top: 4px; }
+  .widget .sub { font-size: 11px; color: var(--faint); }
+  .nowline { padding: 5px 0; font-size: 12.5px; color: var(--dim);
+             border-bottom: 1px dotted var(--line); }
+  .nowline:last-of-type { border-bottom: 0; }
+  .nowline b { color: var(--text); }
+
+  /* ---------- base map (Bases tab) ---------- */
+  #view-bases .editor { display: flex; flex-direction: column; gap: 14px; }
+  .bmaphead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bmaphead .ttl { font-size: 16px; font-weight: 800; }
+  .bmaphead .held { font-size: 11px; padding: 3px 10px; border-radius: 10px;
+                    background: rgba(124,92,255,.14); color: #b9a8ff;
+                    font-weight: 700; }
+  .bmaphead .spacer { flex: 1; }
+  #bmapwrap { position: relative; width: 100%; border-radius: 16px;
+              overflow: hidden; border: 1px solid var(--line);
+              background: #0a0d18; touch-action: none;
+              box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  #bzoomer { position: absolute; inset: 0; transform-origin: 0 0; }
+  #bzoomer img.bplan { display: block; width: 100%; height: auto;
+                       user-select: none; -webkit-user-drag: none; }
+  .bground { position: absolute; inset: 0; background:
+      radial-gradient(75% 68% at 50% 52%, #1d2445 0%, #161b34 52%,
+                      #10142a 78%, #0b0e1d 100%); }
+  .bground::after { content: ""; position: absolute; left: 9%; top: 9%;
+      right: 9%; bottom: 9%; border: 2px dashed rgba(124,92,255,.25);
+      border-radius: 50%; }
+  #boverlay { position: absolute; inset: 0; }
+  .bhale { position: absolute; text-align: center; cursor: pointer; z-index: 2;
+           transform: translate(-50%, -50%) scale(var(--binv, 1)); }
+  .bhale .hbox { width: 44px; height: 34px; margin: 0 auto; border-radius: 10px;
+                 display: flex; align-items: center; justify-content: center;
+                 font-size: 16px;
+                 background: linear-gradient(160deg, #262e56, #1a2038);
+                 border: 1px solid var(--line2);
+                 box-shadow: 0 3px 10px rgba(0,0,0,.45);
+                 transition: border-color .13s; }
+  .bhale:hover .hbox { border-color: var(--accent); }
+  .bhale.sel .hbox { outline: 2px solid var(--accent);
+                     box-shadow: 0 0 14px rgba(124,92,255,.55); }
+  .bhale.droptarget .hbox { outline: 3px solid var(--accent2);
+                            outline-offset: 2px; }
+  .bhale .hlbl { margin-top: 3px; font-size: 10.5px; font-weight: 700;
+                 color: var(--text); white-space: nowrap;
+                 text-shadow: 0 1px 4px #000, 0 0 8px #000; }
+  body.barrange .bhale .hbox { outline: 2px dashed var(--gold);
+                               outline-offset: 2px; cursor: grab; }
+  .bnpc { position: absolute; width: 22px; height: 22px; border-radius: 50%;
+          z-index: 3; transform: translate(-50%, -50%) scale(var(--binv, 1));
+          background: var(--grad); border: 2px solid #fff; color: #fff;
+          font-size: 8.5px; font-weight: 800; display: flex;
+          align-items: center; justify-content: center; cursor: grab;
+          box-shadow: 0 0 10px rgba(124,92,255,.55); user-select: none; }
+  .bnpc::after { content: ""; position: absolute; inset: -2px;
+          border-radius: 50%; border: 2px solid rgba(124,92,255,.8);
+          animation: bping 2.6s ease-out infinite; }
+  @keyframes bping { 0% { transform: scale(.6); opacity: .9; }
+                     80%, 100% { transform: scale(2); opacity: 0; } }
+  .bnpc.sel { outline: 2px solid #fff;
+              box-shadow: 0 0 16px rgba(77,195,255,.8); }
+  .bnpc.dragging { cursor: grabbing; z-index: 50; }
+  .bnpc.dragging::after { animation: none; }
+  .bcols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px;
+           align-items: start; }
+  @media (max-width: 1150px) { .bcols { grid-template-columns: 1fr; } }
+  .portrait { width: 62px; height: 62px; border-radius: 14px; flex-shrink: 0;
+              display: flex; align-items: center; justify-content: center;
+              font-weight: 800; font-size: 19px; color: #fff;
+              background: var(--grad); overflow: hidden; }
+  .portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .npchead { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .npchead .nm { font-size: 15px; font-weight: 800; }
+  .npchead .meta { font-size: 12px; color: var(--dim); }
+  .benchchips { max-height: 132px; overflow-y: auto; }
+
   /* ---------- toast & gate ---------- */
   #toast { position: fixed; bottom: 20px; left: 50%;
-           transform: translateX(-50%); background: #1d3526;
+           transform: translateX(-50%); background: #241d4a;
            border: 1px solid var(--accent); color: var(--text);
-           padding: 9px 18px; border-radius: 10px; opacity: 0;
+           padding: 9px 18px; border-radius: 11px; opacity: 0;
            transition: opacity .25s; pointer-events: none; z-index: 99;
            box-shadow: 0 6px 24px rgba(0,0,0,.45); font-size: 13.5px; }
   #toast.err { background: var(--danger-bg); border-color: var(--danger); }
-  #tokengate { position: fixed; inset: 0; background: rgba(8,10,14,.94);
+  #tokengate { position: fixed; inset: 0; background: rgba(6,8,14,.94);
                display: flex; align-items: center; justify-content: center;
                z-index: 100; }
   #tokengate .card { width: 340px; box-shadow: 0 12px 48px rgba(0,0,0,.6); }
   #tokengate input { width: 100%; margin: 10px 0; }
-  #tokengate button { width: 100%; padding: 9px; background: var(--accent);
-                      border: 0; border-radius: 8px; color: var(--accent-ink);
-                      font-weight: 700; cursor: pointer; font: inherit; }
+  #tokengate button { width: 100%; padding: 9px; background: var(--grad);
+                      border: 0; border-radius: 9px; color: #fff;
+                      font-weight: 700; cursor: pointer; font: inherit;
+                      box-shadow: 0 4px 14px rgba(124,92,255,.3); }
   /* Region card preview — shaped like the Discord embed /region posts, so what
      the dashboard shows is what the table will see. */
   .rprev { background: #2b2d31; border-left: 4px solid #5865f2; border-radius: 5px;
@@ -245,30 +414,47 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>LNK Mini · Dev Dashboard</h1>
-  <nav class="tabs">
-    <span class="tab active" data-view="map">Map</span>
-    <span class="tab" data-view="players">Players</span>
-    <span class="tab" data-view="npcs">NPCs</span>
-    <span class="tab" data-view="items">Items</span>
-    <span class="tab" data-view="quests">Questlines</span>
-    <span class="tab" data-view="lines">Lines</span>
-    <span class="tab" data-view="events">Events</span>
-    <span class="tab" data-view="shops">Shops</span>
-    <span class="tab" data-view="sites">Sites</span>
-    <span class="tab" data-view="regions">Regions</span>
-    <span class="tab" data-view="locations">Locations</span>
-    <span class="tab" data-view="bases">Bases</span>
+<div id="shell">
+<aside id="side">
+  <div class="brand">
+    <div class="logo">📡</div>
+    <div class="bn">LNK Mini<small>DEV DASHBOARD</small></div>
+  </div>
+  <nav>
+    <span class="tab active" data-view="overview"><span class="ic">▦</span><span class="lb">Overview</span></span>
+    <span class="tab" data-view="map"><span class="ic">🗺</span><span class="lb">Map</span></span>
+    <span class="tab" data-view="bases"><span class="ic">🏠</span><span class="lb">Bases</span></span>
+    <span class="tab" data-view="players"><span class="ic">👥</span><span class="lb">Players</span></span>
+    <span class="tab" data-view="npcs"><span class="ic">🎭</span><span class="lb">NPCs</span></span>
+    <span class="tab" data-view="items"><span class="ic">🎒</span><span class="lb">Items</span></span>
+    <span class="tab" data-view="quests"><span class="ic">📜</span><span class="lb">Questlines</span></span>
+    <span class="tab" data-view="lines"><span class="ic">📡</span><span class="lb">Lines</span></span>
+    <span class="tab" data-view="events"><span class="ic">🌩</span><span class="lb">Events</span></span>
+    <span class="tab" data-view="shops"><span class="ic">🏪</span><span class="lb">Shops</span></span>
+    <span class="tab" data-view="sites"><span class="ic">🔐</span><span class="lb">Sites</span></span>
+    <span class="tab" data-view="regions"><span class="ic">🧭</span><span class="lb">Regions</span></span>
+    <span class="tab" data-view="locations"><span class="ic">📍</span><span class="lb">Locations</span></span>
   </nav>
-  <button id="newplacebtn" title="Add a new place to the island" style="margin-left:auto">＋ Place</button>
-  <button id="arrangebtn" title="Drag place markers to reposition them on the map">✥ Arrange</button>
-  <span id="status">connecting…</span>
+  <div id="sidefoot">
+    <span id="status">connecting…</span>
+    <p class="hint">Live from the bot — edits land instantly and are audited.</p>
+  </div>
+</aside>
+<div id="maincol">
+<div id="topbar">
+  <span id="pagetitle">Overview<small id="pagesub"></small></span>
+  <span style="flex:1"></span>
+  <button id="newplacebtn" title="Add a new place to the island" style="display:none">＋ Place</button>
+  <button id="arrangebtn" title="Drag place markers to reposition them on the map" style="display:none">✥ Arrange</button>
   <button id="cfgbtn" title="Bot API address & token">⚙</button>
-</header>
+</div>
 
 <main>
-<section class="view active" id="view-map">
+<section class="view active" id="view-overview">
+  <div id="ovbody" style="width:100%"><p class="muted">Loading…</p></div>
+</section>
+
+<section class="view" id="view-map">
   <div id="mapwrap">
     <div id="zoomer">
       <img id="underlay" src="/dash/underlay" alt="Motu Lani">
@@ -409,12 +595,16 @@
     <button class="btn mini" id="bnew">＋ New base</button>
     <div id="blist" style="margin-top:8px"></div>
     <p class="hint" style="margin-top:8px">A base is a stronghold a team
-    holds — who runs it, its working houses and their staff, its current
-    posture. Should a new base surface, author it here.</p>
+    holds, drawn as a live interior map: hale as houses, stationed NPCs as
+    glowing dots. Click a hale or a dot to tend it; drag a dot onto another
+    hale to re-station. Players see this same map on their team site and can
+    move their own NPCs — tasks and routines stay dev-authored here.</p>
   </div>
-  <div class="editor card" id="bedit"><p class="muted">Select a base.</p></div>
+  <div class="editor" id="bedit"><p class="muted">Select a base.</p></div>
 </section>
 </main>
+</div>
+</div>
 
 <div id="toast"></div>
 <div id="tokengate" style="display:none">
@@ -441,7 +631,9 @@ let TOKEN = localStorage.getItem("ht_token") || "";
 // (loopback is exempt from mixed-content rules in Chrome, so the https page
 // can talk to http://127.0.0.1:8787 on the bot machine). A hand-set address
 // in the ⚙ gate always wins.
-const SERVED_BY_BOT = location.port === "8787";
+// Served-by-bot = the /dash route (any port — the port is an env knob);
+// the copy on the lore site lives at /dashboard.html instead.
+const SERVED_BY_BOT = location.pathname === "/dash" || location.port === "8787";
 const PUBLIC_API = "https://smallboi.tail7fc4d1.ts.net";   // the bot's Tailscale Funnel
 const LOOPBACK_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i;
 // A STORED loopback address is stale for anyone who isn't sitting at the bot
@@ -488,6 +680,13 @@ function fxBadge(it) {
              title: Items.effectSummary(e) + (e.ooc ? " · usable outside combat" : "") };
   }
   return { cls: "special", label: k, title: Items.effectSummary(e) };
+}
+const initials = n => String(n || "?").split(/\s+/).slice(0, 2)
+  .map(w => w[0] || "").join("").toUpperCase();
+function setStatus(ok) {
+  $("#status").textContent = ok ? "live · " + new Date().toLocaleTimeString()
+                                : "offline — is the bot running?";
+  $("#status").classList.toggle("live", !!ok);
 }
 const overlay = $("#overlay"), wrap = $("#mapwrap"), img = $("#underlay"),
       zoomer = $("#zoomer");
@@ -591,7 +790,7 @@ async function api(path, body) {
 }
 
 /* ---------- view switching ---------- */
-const Views = { current: "map" };
+const Views = { current: "overview" };
 document.querySelectorAll(".tab[data-view]").forEach(t =>
   t.onclick = () => switchView(t.dataset.view));
 function switchView(v) {
@@ -602,6 +801,21 @@ function switchView(v) {
     s.classList.toggle("active", s.id === "view-" + v));
   $("#arrangebtn").style.display = v === "map" ? "" : "none";
   $("#newplacebtn").style.display = v === "map" ? "" : "none";
+  const meta = {
+    overview: ["Overview", "the island at a glance"],
+    map: ["Map", "live team positions"],
+    players: ["Players", ""], npcs: ["NPCs", ""], items: ["Items", ""],
+    quests: ["Questlines", ""], lines: ["Lines", "live state"],
+    events: ["Road events", ""], shops: ["Shops", ""],
+    sites: ["Team sites", ""], regions: ["Regions", ""],
+    locations: ["Locations", ""],
+    bases: ["Bases", "live interior maps"],
+  };
+  const [ttl, sub] = meta[v] || [v, ""];
+  $("#pagetitle").firstChild.textContent = ttl;
+  $("#pagesub").textContent = sub ? " — " + sub : "";
+  if (v === "overview") Overview.load();
+  if (v === "map") refresh();
   if (v === "players") Players.load();
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
@@ -614,7 +828,6 @@ function switchView(v) {
   if (v === "locations") Locations.load();
   if (v === "bases") Bases.load();
 }
-
 /* ================= MAP ================= */
 function pct(v, axis) {
   const c = state.canvas;
@@ -959,21 +1172,22 @@ function startPlaceDrag(e, key, el) {
   };
 }
 async function refresh() {
-  if (drag || Views.current !== "map") return;
-  try {
-    state = await api("/api/map");
-    wrap.style.aspectRatio = `${state.canvas.w} / ${state.canvas.h}`;
-    render();
-    $("#status").textContent = "live · " + new Date().toLocaleTimeString();
-    $("#status").classList.add("live");
-  } catch (e) {
-    if (e.message !== "unauthorized") {
-      $("#status").textContent = "offline — is the bot running?";
-      $("#status").classList.remove("live");
+  if (Views.current === "map") {
+    if (drag) return;
+    try {
+      state = await api("/api/map");
+      wrap.style.aspectRatio = `${state.canvas.w} / ${state.canvas.h}`;
+      render();
+      setStatus(true);
+    } catch (e) {
+      if (e.message !== "unauthorized") setStatus(false);
     }
+  } else if (Views.current === "bases") {
+    Bases.poll();
+  } else if (Views.current === "overview") {
+    Overview.tick();
   }
 }
-
 /* ================= PLAYERS ================= */
 const Players = {
   data: null, sel: null, selTeam: null, creating: false,
@@ -1448,6 +1662,14 @@ const Npcs = {
         <label>Scene note (steers every reply until cleared — /npc note)</label>
         <textarea id="nf-notes" rows="2">${esc(n.notes)}</textarea>
         <hr>
+        <h2>Task &amp; routine <span class="muted">(players read these on their base map — dev-authored only)</span></h2>
+        <label>Current task — one line</label>
+        <input type="text" id="nf-task" maxlength="200" value="${esc(n.task || "")}"
+               placeholder="Mending the west net before the evening tide">
+        <label>Routine — one beat per line (dawn / noon / dusk…)</label>
+        <textarea id="nf-routine" rows="4"
+          placeholder="Dawn — walks the salt line&#10;Noon — nets with the dock crew">${esc((n.routine || []).join("\n"))}</textarea>
+        <hr>
         <h2>Combat card</h2>
         <div class="grid2">
           <div><label>Tier</label><input type="text" id="nf-tier" value="${esc(c.tier || "")}"
@@ -1502,6 +1724,8 @@ const Npcs = {
         titles: $("#nf-titles").value.split("\n").map(s => s.trim()).filter(Boolean),
         gif: $("#nf-gif").value,
         notes: $("#nf-notes").value,
+        task: $("#nf-task").value,
+        routine: $("#nf-routine").value.split("\n").map(s => s.trim()).filter(Boolean),
         combat: {
           tier: $("#nf-tier").value,
           hp: $("#nf-hp").value === "" ? null : parseInt($("#nf-hp").value, 10),
@@ -2727,14 +2951,172 @@ const Locations = {
 $("#lsearch").oninput = () => Locations.renderList();
 $("#qnew").onclick = () => { Quests.creating = true; Quests.renderEditor(); };
 
-/* ---------- Bases: team-held strongholds — roster, houses, posture ---------- */
+/* ================= OVERVIEW ================= */
+const Overview = {
+  data: null, _last: 0,
+  async load() {
+    try { this.data = await api("/api/dash/overview"); }
+    catch (e) {
+      if (e.message !== "unauthorized")
+        $("#ovbody").innerHTML =
+          "<p class='muted'>Could not load — is the bot running?</p>";
+      return;
+    }
+    this._last = Date.now();
+    setStatus(true);
+    this.render();
+  },
+  // Rides the global 8s poll; a full overview rebuild every 32s is plenty.
+  tick() { if (Date.now() - this._last > 30000) this.load(); },
+  spark(days) {
+    const w = 96, h = 30, max = Math.max(1, ...days.map(d => d.active));
+    const pts = days.map((d, i) =>
+      `${(i / Math.max(1, days.length - 1)) * w},` +
+      `${h - (d.active / max) * (h - 5) - 2}`).join(" ");
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none">
+      <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#4dc3ff"/>
+      </linearGradient></defs>
+      <polyline points="${pts}" stroke="url(#sg)" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  },
+  render() {
+    const d = this.data, c = d.counts;
+    const today = d.daily[d.daily.length - 1] || { active: 0, msgs: 0 };
+    const weekMsgs = d.daily.slice(-7).reduce((a, x) => a + x.msgs, 0);
+    const weekLines = d.lines_per_team.reduce((a, t) => a + t.week, 0);
+    const lb = d.leaderboard.map((r, i) => `
+      <div class="lbrow ${i < 3 ? "top" : ""}">
+        <span class="rank">${i + 1}</span>
+        <span class="av">${esc(initials(r.name))}</span>
+        <span class="who"><div class="nm">${esc(r.name)}</div>
+          <div class="tm">${esc(r.team || "")}</div></span>
+        <span class="n">${fmt(r.msgs)}</span>
+      </div>`).join("")
+      || "<p class='muted'>No tracked line messages yet — the counter starts today; check back after players talk.</p>";
+    const lines = d.lines_per_team.map(t => {
+      const bars = d.daily.map(x => {
+        const cell = t.days[x.day] || {};
+        return { v: (cell.opened || 0) + (cell.closed || 0), day: x.day };
+      });
+      const max = Math.max(1, ...bars.map(b => b.v));
+      return `<div class="linerow">
+        <div class="top"><span class="tm">${esc(t.team)}</span>
+          <span class="n">today <b>${t.today}</b> · week <b>${t.week}</b> · all ${t.total}</span></div>
+        <div class="bars">${bars.map(b =>
+          `<i class="${b.v ? "" : "zero"}" style="height:${b.v ? Math.max(14, b.v / max * 100) : 6}%"
+             title="${b.day}: ${b.v} line${b.v === 1 ? "" : "s"}"></i>`).join("")}</div>
+      </div>`;
+    }).join("");
+    const widgets = [
+      ["map", "🗺", "Map", c.on_map + " placed", c.traveling + " traveling"],
+      ["bases", "🏠", "Bases", c.bases, c.stationed + " NPCs stationed"],
+      ["players", "👥", "Players", c.players, c.teams + " teams"],
+      ["npcs", "🎭", "NPCs", c.npcs, c.npcs_dead ? c.npcs_dead + " dead" : "all standing"],
+      ["items", "🎒", "Items", c.items, "definitions"],
+      ["quests", "📜", "Questlines", c.quests, ""],
+      ["lines", "📡", "Lines", c.lines_open, "open now"],
+      ["events", "🌩", "Road events", c.events, "in the pool"],
+      ["shops", "🏪", "Shops", c.listings, "market listings"],
+      ["sites", "🔐", "Team sites", c.sites, "published"],
+      ["regions", "🧭", "Regions", c.regions, ""],
+      ["locations", "📍", "Locations", c.locations, "sheets"],
+    ].map(([v, ic, t, n, sub]) => `
+      <div class="widget" data-goto="${v}">
+        <div class="ichead"><span class="ic">${ic}</span><span class="t">${t}</span></div>
+        <div class="n">${n}</div><div class="sub">${sub}</div>
+      </div>`).join("");
+    const open = d.open_lines.map(l => `
+      <div class="nowline">📡 <b>${esc(l.name || "line")}</b> — hosted by
+        <b>${esc(l.host)}</b>${l.members.length
+          ? ", with " + l.members.map(esc).join(", ") : ""}${l.source
+          ? " · " + esc(l.source) : ""}</div>`).join("")
+      || "<div class='nowline'>No line is open right now.</div>";
+    const act = d.actives_today.length
+      ? d.actives_today.map(esc).join(", ")
+      : "no one yet today";
+    const wealth = d.wealth.map((w, i) => `
+      <div class="lbrow ${i === 0 ? "top" : ""}">
+        <span class="rank">${i + 1}</span>
+        <span class="who"><div class="nm">${esc(w.team)}</div></span>
+        <span class="n" style="color:var(--gold)">$${fmtC(w.total)}</span>
+      </div>`).join("");
+    const ledger = d.ledger.map(e => `
+      <div class="nowline"><b>${esc(String(e.when || "").slice(5))}</b>
+        ${esc(e.text)}</div>`).join("")
+      || "<div class='nowline'>Quiet so far.</div>";
+    $("#ovbody").innerHTML = `
+      <div class="statrow">
+        <div class="tile"><div class="k">Active players today</div>
+          <div class="v">${today.active}</div>
+          <div class="sub">of ${c.players} registered</div>${this.spark(d.daily)}</div>
+        <div class="tile"><div class="k">Line messages today</div>
+          <div class="v">${fmt(today.msgs)}</div>
+          <div class="sub">${fmt(weekMsgs)} this week</div></div>
+        <div class="tile"><div class="k">Team lines this week</div>
+          <div class="v">${weekLines}</div>
+          <div class="sub">${c.lines_open} open right now</div></div>
+        <div class="tile goldv"><div class="k">Richest team</div>
+          <div class="v">${d.wealth.length ? "$" + fmtC(d.wealth[0].total) : "—"}</div>
+          <div class="sub">${d.wealth.length ? esc(d.wealth[0].team) : ""}</div></div>
+      </div>
+      <div class="card"><h2>Sections</h2>
+        <div class="widgets">${widgets}</div></div>
+      <div class="ovcols">
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <div class="card"><h2>Lines per team — last 14 days</h2>
+            ${lines || "<p class='muted'>No line history yet.</p>"}
+            <p class="hint" style="margin-top:8px">Bars count lines a team came
+            onto (opened) plus lines archived (closed) that day — hosted and
+            joined alike.</p></div>
+          <div class="card"><h2>Right now</h2>
+            <div class="nowline">🟢 Active today: <b>${act}</b></div>
+            ${open}
+            <p class="hint" style="margin-top:8px">What players are living at
+            this minute — check here before you push a scene, fire an event,
+            or move a team.</p></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <div class="card"><h2>Most active — 7 days</h2>${lb}</div>
+          <div class="card"><h2>Team wealth</h2>${wealth}</div>
+          <div class="card"><h2>Latest ledger</h2>${ledger}</div>
+        </div>
+      </div>`;
+    $("#ovbody").querySelectorAll(".widget").forEach(w =>
+      w.onclick = () => switchView(w.dataset.goto));
+  },
+};
+
+/* ---------- Bases: live interior maps — hale markers, NPC dots ---------- */
 const Bases = {
-  data: null, sel: null, creating: false, houses: [], _draft: null,
+  data: null, sel: null, creating: false, details: false,
+  arrange: false, selHale: null, newHale: false, selNpc: null,
+  benchQ: "", view: { k: 1, tx: 0, ty: 0 },
+  _drag: null, _blobs: {}, _sig: "",
   async load() {
     try { this.data = await api("/api/dash/bases"); }
     catch (e) { return; }
+    this._sig = JSON.stringify(this.data.bases);
     this.renderList();
-    this.renderEditor();
+    this.renderView();
+  },
+  // Rides the global 8s poll — the dots stay live while devs watch. Never
+  // repaints under a drag or while something in the editor has focus.
+  async poll() {
+    if (!this.sel || this.creating || this.details || this._drag) return;
+    const ae = document.activeElement;
+    if (ae && $("#bedit").contains(ae) &&
+        /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+    let fresh;
+    try { fresh = await api("/api/dash/bases"); }
+    catch (e) { if (e.message !== "unauthorized") setStatus(false); return; }
+    setStatus(true);
+    const sig = JSON.stringify(fresh.bases);
+    if (sig === this._sig) return;
+    this._sig = sig;
+    this.data = fresh;
+    this.renderList();
+    this.renderView();
   },
   base() { return this.data.bases.find(b => b.key === this.sel); },
   blank() {
@@ -2742,7 +3124,11 @@ const Bases = {
              desc: "", dm: "", houses: [],
              author: localStorage.getItem("ht_author") || "" };
   },
-  npcName(k) { return (this.data.npcs || {})[k] || k; },
+  card(k) { return (this.data.npcs || {})[k]; },
+  npcName(k) { return (this.card(k) || {}).name || k; },
+  stationedKeys(b) {
+    return new Set((b.houses || []).flatMap(h => h.npcs || []));
+  },
   renderList() {
     const q = $("#bsearch").value.trim().toLowerCase();
     const box = $("#blist");
@@ -2752,73 +3138,480 @@ const Bases = {
       if (q && !(it.name + " " + (it.team || "") + " " + (it.steward || ""))
             .toLowerCase().includes(q))
         continue;
+      const staffed = this.stationedKeys(it).size;
       const bits = [];
       if (it.team) bits.push(it.team);
-      if ((it.houses || []).length)
-        bits.push(`${it.houses.length} house${it.houses.length === 1 ? "" : "s"}`);
+      if ((it.houses || []).length) bits.push(`${it.houses.length} hale`);
+      if (staffed) bits.push(`${staffed} 🎭`);
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === it.key ? " sel" : "");
       row.innerHTML = `<span class="nm">${esc(it.name)}</span>
         <span class="sub">${esc(bits.join(" · "))}</span>`;
       row.onclick = () => { this.sel = it.key; this.creating = false;
-                            this.renderList(); this.renderEditor(); };
+                            this.details = false; this.selHale = null;
+                            this.selNpc = null; this.newHale = false;
+                            this.view = { k: 1, tx: 0, ty: 0 };
+                            this.renderList(); this.renderView(); };
       box.appendChild(row);
     }
     if (!box.childElementCount)
       box.innerHTML = "<p class='muted'>No bases yet — author the first one.</p>";
   },
-  formValues(it) {
-    return {
-      name: $("#bf-name").value, team: $("#bf-team").value,
-      place: $("#bf-place").value, steward: $("#bf-steward").value,
-      status: $("#bf-status").value, desc: $("#bf-desc").value,
-      dm: $("#bf-dm").value, author: $("#bf-author").value,
-      houses: this.houses.map(h => ({ name: h.name, function: h.function,
-                                      staff: h.staff, npcs: h.npcs || [] })),
+  /* ---- shared helpers ---- */
+  async blob(path, key) {
+    if (this._blobs[key] !== undefined) return this._blobs[key];
+    this._blobs[key] = "";
+    try {
+      const r = await fetch(API + path,
+                            { headers: { "Authorization": "Bearer " + TOKEN } });
+      if (r.ok) this._blobs[key] = URL.createObjectURL(await r.blob());
+    } catch (e) { /* portrait is decoration — never block the map */ }
+    return this._blobs[key];
+  },
+  // Bulk-save the CURRENT stored houses with a mutation applied. Rows travel
+  // verbatim (name/function/staff/npcs/x/y) so nothing is wiped — the erased
+  // -32-assignments hole taught that lesson.
+  async saveHouses(mutate, note) {
+    const b = this.base();
+    const houses = (b.houses || []).map(h => ({ ...h }));
+    const out = mutate(houses);
+    if (out === false) return;
+    try {
+      await api("/api/dash/base", {
+        key: b.key, name: b.name, team: b.team || "", place: b.place || "",
+        steward: b.steward || "", status: b.status || "", desc: b.desc || "",
+        dm: b.dm || "", houses,
+        author: localStorage.getItem("ht_author") || b.author || "",
+      });
+      if (note) toast(note);
+      await this.load();
+    } catch (e) { toast(e.message, true); }
+  },
+  async stationNpc(npcKey, house) {
+    const b = this.base();
+    try {
+      const j = await api("/api/dash/base-npc", {
+        base: b.key, npc: npcKey, house,
+        author: localStorage.getItem("ht_author") || "",
+      });
+      b.houses = j.houses;
+      toast(house ? `${this.npcName(npcKey)} → ${house}`
+                  : `${this.npcName(npcKey)} unassigned`);
+      await this.load();
+    } catch (e) { toast(e.message, true); }
+  },
+  /* ---- the map ---- */
+  applyBView() {
+    const wrap = $("#bmapwrap"), zoomer = $("#bzoomer");
+    if (!wrap || !zoomer) return;
+    const r = wrap.getBoundingClientRect();
+    const v = this.view;
+    v.k = Math.min(Math.max(v.k, 1), 8);
+    v.tx = Math.min(0, Math.max(v.tx, r.width * (1 - v.k)));
+    v.ty = Math.min(0, Math.max(v.ty, r.height * (1 - v.k)));
+    zoomer.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.k})`;
+    zoomer.style.setProperty("--binv", 1 / v.k);
+  },
+  bCanvasXY(e, cv) {
+    const r = $("#bzoomer").getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * cv.w,
+             y: (e.clientY - r.top) / r.height * cv.h };
+  },
+  nearestHale(xy, houses, maxDist) {
+    let best = null, bd = maxDist * maxDist;
+    for (const h of houses) {
+      const d = (h.x - xy.x) ** 2 + (h.y - xy.y) ** 2;
+      if (d < bd) { bd = d; best = h.name; }
+    }
+    return best;
+  },
+  renderView() {
+    const box = $("#bedit");
+    if (this.creating) { this.renderDetails(box, this.blank(), true); return; }
+    const b = this.base();
+    if (!b) { box.innerHTML = "<p class='muted'>Select a base.</p>"; return; }
+    if (this.details) { this.renderDetails(box, b, false); return; }
+    const view = b.map || { canvas: { w: 1200, h: 800 }, houses: [], image: false };
+    const cv = view.canvas;
+    const pct = (v, axis) => (v / (axis === "x" ? cv.w : cv.h) * 100) + "%";
+    let marks = "";
+    for (const h of view.houses) {
+      marks += `<div class="bhale${this.selHale === h.name ? " sel" : ""}"
+        data-hale="${esc(h.name)}" style="left:${pct(h.x, "x")};top:${pct(h.y, "y")}">
+        <div class="hbox">⌂</div><div class="hlbl">${esc(h.name)}</div></div>`;
+      (h.npcs || []).forEach((k, j) => {
+        const c = this.card(k);
+        if (!c) return;
+        const dx = h.x - 26 + (j % 3) * 26, dy = h.y + 34 + Math.floor(j / 3) * 26;
+        marks += `<div class="bnpc${this.selNpc === k ? " sel" : ""}" data-npc="${esc(k)}"
+          data-hale="${esc(h.name)}" title="${esc(c.name)} — ${esc(h.name)}"
+          style="left:${pct(dx, "x")};top:${pct(dy, "y")}">${esc(initials(c.name))}</div>`;
+      });
+    }
+    const stationed = this.stationedKeys(b);
+    const bench = Object.values(this.data.npcs || {})
+      .filter(c => !stationed.has(c.key))
+      .filter(c => !this.benchQ ||
+        (c.name + " " + (c.affiliation || "")).toLowerCase()
+          .includes(this.benchQ))
+      .sort((a, c) => a.name.localeCompare(c.name));
+    box.innerHTML = `
+      <div class="card">
+        <div class="bmaphead">
+          <span class="ttl">${esc(b.name)}</span>
+          ${b.team ? `<span class="held">${esc(b.team)}</span>` : ""}
+          <span class="hint">${esc(b.status || "")}</span>
+          <span class="spacer"></span>
+          <button class="btn mini" id="bm-addhale">＋ Hale</button>
+          <button class="btn mini${this.arrange ? " primary" : ""}" id="bm-arrange"
+            title="Drag hale into position; each drop saves">✥ Arrange</button>
+          <button class="btn mini" id="bm-plan"
+            title="Upload a ground plan image as the map underlay">🖼 Plan</button>
+          ${view.image ? '<button class="btn mini" id="bm-plandel" title="Remove the ground plan">✕ plan</button>' : ""}
+          <button class="btn mini" id="bm-details">✎ Details</button>
+          <input type="file" id="bm-planfile" accept="image/*" style="display:none">
+        </div>
+        <div id="bmapwrap" style="aspect-ratio:${cv.w} / ${cv.h};margin-top:10px">
+          <div id="bzoomer">
+            ${view.image ? '<img class="bplan" id="bplanimg" alt="">'
+                         : '<div class="bground"></div>'}
+            <div id="boverlay">${marks}</div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:8px">Scroll to zoom, drag the ground
+        to pan. Drag a dot onto a hale to re-station its NPC — players can do
+        the same from their team site, live.</p>
+      </div>
+      <div class="bcols">
+        <div class="card"><h2>Off duty — station them</h2>
+          <input class="search" id="bm-benchq" type="text"
+                 placeholder="Search the cast…" value="${esc(this.benchQ)}">
+          <div class="benchchips" id="bm-bench">${bench.slice(0, 60).map(c =>
+            `<span class="chip" data-npc="${esc(c.key)}">${esc(c.name)}</span>`).join(" ")
+            || "<span class='muted'>Everyone alive is stationed here.</span>"}</div>
+          <p class="hint" style="margin-top:6px">Drag a name onto a hale (or
+          click it, then pick a hale). ${bench.length > 60
+            ? bench.length - 60 + " more match — narrow the search." : ""}</p>
+        </div>
+        <div id="bm-panel"></div>
+      </div>`;
+    this.wireMap(b, view, cv);
+    this.renderPanel(b, view);
+  },
+  wireMap(b, view, cv) {
+    const wrap = $("#bmapwrap"), zoomer = $("#bzoomer");
+    this.applyBView();
+    if (view.image) {
+      const img = $("#bplanimg");
+      const ck = "plan:" + b.key + ":" + (b.updated || "");
+      this.blob("/api/dash/base-image?key=" + encodeURIComponent(b.key), ck)
+        .then(u => { if (u && img) img.src = u; });
+    }
+    wrap.onwheel = e => {
+      e.preventDefault();
+      const r = wrap.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const k0 = this.view.k;
+      this.view.k = Math.min(Math.max(this.view.k * Math.exp(-e.deltaY * 0.0016), 1), 8);
+      this.view.tx = mx - (mx - this.view.tx) * (this.view.k / k0);
+      this.view.ty = my - (my - this.view.ty) * (this.view.k / k0);
+      this.applyBView();
+    };
+    let pan = null;
+    wrap.onpointerdown = e => {
+      if (!e.target.classList.contains("bplan") &&
+          !e.target.classList.contains("bground") &&
+          e.target.id !== "boverlay") return;
+      pan = { x: e.clientX, y: e.clientY };
+    };
+    wrap.onpointermove = e => {
+      if (!pan) return;
+      this.view.tx += e.clientX - pan.x;
+      this.view.ty += e.clientY - pan.y;
+      pan = { x: e.clientX, y: e.clientY };
+      this.applyBView();
+    };
+    wrap.onpointerup = wrap.onpointerleave = () => pan = null;
+    wrap.ondblclick = () => { this.view = { k: 1, tx: 0, ty: 0 }; this.applyBView(); };
+    // Hale: click to tend, drag to arrange (arrange mode only).
+    wrap.querySelectorAll(".bhale").forEach(el => {
+      if (this.arrange) {
+        el.querySelector(".hbox").onpointerdown =
+          e => this.startHaleDrag(e, el, cv);
+      } else {
+        el.onclick = () => { this.selHale =
+          this.selHale === el.dataset.hale ? null : el.dataset.hale;
+          this.selNpc = null; this.newHale = false;
+          this.renderView(); };
+      }
+    });
+    // NPC dots: click to open the card, drag onto a hale to re-station.
+    wrap.querySelectorAll(".bnpc").forEach(el => {
+      el.onpointerdown = e => this.startNpcDrag(e, el, cv, view);
+    });
+    // Bench chips: click opens the card; drag onto a hale stations them.
+    $("#bm-benchq").oninput = e => { this.benchQ = e.target.value.trim().toLowerCase();
+                                     this.renderView(); };
+    $("#bm-bench").querySelectorAll(".chip").forEach(ch => {
+      ch.onpointerdown = e => this.startNpcDrag(e, ch, cv, view, true);
+    });
+    $("#bm-addhale").onclick = () => { this.newHale = true; this.selHale = null;
+                                       this.selNpc = null; this.renderPanel(b, view); };
+    $("#bm-arrange").onclick = () => {
+      this.arrange = !this.arrange;
+      document.body.classList.toggle("barrange", this.arrange);
+      toast(this.arrange ? "Arrange — drag hale; each drop saves" : "Arrange off");
+      this.renderView();
+    };
+    $("#bm-details").onclick = () => { this.details = true; this.renderView(); };
+    $("#bm-plan").onclick = () => $("#bm-planfile").click();
+    $("#bm-planfile").onchange = async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const data = await new Promise(res => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.readAsDataURL(f);
+      });
+      try {
+        await api("/api/dash/base-image",
+                  { key: b.key, filename: f.name, content_type: f.type, data });
+        toast("Ground plan set — hale keep their spots");
+        this._blobs = {};
+        await this.load();
+      } catch (err) { toast(err.message, true); }
+    };
+    const del = $("#bm-plandel");
+    if (del) del.onclick = async () => {
+      if (!confirm("Remove the ground plan and go back to the drawn ground?"))
+        return;
+      try {
+        await api("/api/dash/base-image", { key: b.key, clear: true });
+        this._blobs = {};
+        await this.load();
+      } catch (err) { toast(err.message, true); }
     };
   },
-  renderEditor() {
-    const box = $("#bedit");
-    const saved = this.creating ? this.blank() : this.base();
-    if (!saved) { box.innerHTML = "<p class='muted'>Select a base.</p>"; return; }
-    // _draft carries unsaved typing across the re-render a hale add/remove
-    // or an NPC chip action does (same pattern as the Regions tab).
-    const it = this._draft || saved;
-    this._draft = null;
-    this.houses = (it.houses || []).map(h => ({
-      name: h.name || "", function: h.function || "",
-      staff: h.staff || "", npcs: [...(h.npcs || [])] }));
+  startHaleDrag(e, el, cv) {
+    e.preventDefault();
+    e.stopPropagation();
+    this._drag = true;
+    const dot = el.querySelector(".hbox");
+    dot.setPointerCapture(e.pointerId);
+    let xy = null;
+    const pctX = v => (v / cv.w * 100) + "%", pctY = v => (v / cv.h * 100) + "%";
+    dot.onpointermove = ev => {
+      xy = this.bCanvasXY(ev, cv);
+      el.style.left = pctX(xy.x);
+      el.style.top = pctY(xy.y);
+    };
+    dot.onpointerup = () => {
+      dot.onpointermove = dot.onpointerup = null;
+      this._drag = null;
+      if (!xy) return;
+      api("/api/dash/base-house-coord", {
+        base: this.sel, house: el.dataset.hale,
+        x: Math.round(xy.x), y: Math.round(xy.y),
+      }).then(() => { toast(`${el.dataset.hale} placed`); this.load(); })
+        .catch(err => { toast(err.message, true); this.renderView(); });
+    };
+  },
+  startNpcDrag(e, el, cv, view, fromBench = false) {
+    if (this.arrange) return;
+    e.preventDefault();
+    const key = el.dataset.npc;
+    let moved = false;
+    el.setPointerCapture(e.pointerId);
+    const pctX = v => (v / cv.w * 100) + "%", pctY = v => (v / cv.h * 100) + "%";
+    el.onpointermove = ev => {
+      moved = true;
+      this._drag = true;
+      el.classList.add("dragging");
+      if (!fromBench) {
+        const xy = this.bCanvasXY(ev, cv);
+        el.style.left = pctX(xy.x);
+        el.style.top = pctY(xy.y);
+      }
+      const xy = this.bCanvasXY(ev, cv);
+      const near = this.nearestHale(xy, view.houses, 70);
+      document.querySelectorAll(".bhale").forEach(pe =>
+        pe.classList.toggle("droptarget", pe.dataset.hale === near));
+    };
+    el.onpointerup = ev => {
+      el.onpointermove = el.onpointerup = null;
+      el.classList.remove("dragging");
+      document.querySelectorAll(".bhale").forEach(pe =>
+        pe.classList.remove("droptarget"));
+      const wasDrag = this._drag;
+      this._drag = null;
+      if (!moved || !wasDrag) {
+        // A plain click: open the card.
+        this.selNpc = this.selNpc === key ? null : key;
+        this.selHale = null;
+        this.newHale = false;
+        this.renderView();
+        return;
+      }
+      const near = this.nearestHale(this.bCanvasXY(ev, cv), view.houses, 70);
+      if (!near || near === el.dataset.hale) { this.renderView(); return; }
+      this.stationNpc(key, near);
+    };
+  },
+  /* ---- side panel: base summary / hale editor / NPC card ---- */
+  renderPanel(b, view) {
+    const box = $("#bm-panel");
+    if (this.newHale) {
+      box.innerHTML = `<div class="card"><h2>New hale</h2><div class="frm">
+        <label>Name</label><input type="text" id="bh-nm" placeholder="Hale Kilo">
+        <label>Function — the post this house works</label>
+        <input type="text" id="bh-fn" placeholder="Lookout, Comms loft…">
+        <label>Other staff (free text)</label>
+        <input type="text" id="bh-st" placeholder="Watch crews, aunties…">
+        <div class="btnrow">
+          <button class="btn primary" id="bh-go">Add hale</button>
+          <button class="btn" id="bh-no">Cancel</button>
+        </div></div></div>`;
+      $("#bh-no").onclick = () => { this.newHale = false; this.renderPanel(b, view); };
+      $("#bh-go").onclick = () => {
+        const name = $("#bh-nm").value.trim();
+        if (!name) { toast("Name the hale first", true); return; }
+        this.newHale = false;
+        this.saveHouses(houses => {
+          if (houses.some(h => h.name === name)) { toast("A hale by that name already stands", true); return false; }
+          houses.push({ name, function: $("#bh-fn").value.trim(),
+                        staff: $("#bh-st").value.trim(), npcs: [] });
+        }, `${name} raised`);
+      };
+      return;
+    }
+    if (this.selNpc) { this.renderNpcPanel(box, b, view); return; }
+    if (this.selHale) { this.renderHalePanel(box, b, view); return; }
+    box.innerHTML = `<div class="card"><h2>${esc(b.name)}</h2>
+      ${b.steward ? `<div class="hint">Steward: <b>${esc(b.steward)}</b></div>` : ""}
+      ${b.desc ? `<p class="hint" style="margin-top:6px">${esc(b.desc).slice(0, 420)}${b.desc.length > 420 ? "…" : ""}</p>` : ""}
+      <p class="hint" style="margin-top:8px">${(b.houses || []).length} hale ·
+        ${this.stationedKeys(b).size} NPCs stationed. Click a hale or a dot to
+        tend it. The team sees this map live on their site and can move their
+        own NPCs; tasks and routines are yours to write.</p>
+      ${b.updated ? `<p class="hint">Last saved ${esc(b.updated)}${b.author ? " · " + esc(b.author) : ""}</p>` : ""}</div>`;
+  },
+  renderHalePanel(box, b, view) {
+    const h = (b.houses || []).find(x => x.name === this.selHale);
+    if (!h) { this.selHale = null; this.renderPanel(b, view); return; }
+    const roster = Object.values(this.data.npcs || {})
+      .sort((a, c) => a.name.localeCompare(c.name));
+    const stationed = this.stationedKeys(b);
+    box.innerHTML = `<div class="card"><h2>Hale — ${esc(h.name)}</h2><div class="frm">
+      <label>Name</label><input type="text" id="hp-nm" value="${esc(h.name)}">
+      <label>Function — the post this house works</label>
+      <input type="text" id="hp-fn" value="${esc(h.function || "")}">
+      <label>Other staff (free text, flavor-only names)</label>
+      <input type="text" id="hp-st" value="${esc(h.staff || "")}">
+      <label>Stationed here</label>
+      <div>${(h.npcs || []).map(k => `<span class="chip">${esc(this.npcName(k))}
+        <a href="#" data-un="${esc(k)}" title="Unassign">✕</a></span>`).join(" ")
+        || "<span class='muted'>No roster NPCs stationed.</span>"}</div>
+      <select id="hp-add" style="width:100%;margin-top:7px">
+        <option value="">— station an NPC here… —</option>
+        ${roster.map(c => `<option value="${esc(c.key)}">${esc(c.name)}${stationed.has(c.key) ? " (moves them)" : ""}</option>`).join("")}
+      </select>
+      <div class="btnrow">
+        <button class="btn primary" id="hp-save">Save hale</button>
+        <button class="btn danger" id="hp-del">Remove…</button>
+        <button class="btn" id="hp-close">Close</button>
+      </div></div></div>`;
+    box.querySelectorAll("[data-un]").forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      this.stationNpc(a.dataset.un, null);
+    });
+    $("#hp-add").onchange = e => {
+      if (e.target.value) this.stationNpc(e.target.value, h.name);
+    };
+    $("#hp-save").onclick = () => {
+      const nm = $("#hp-nm").value.trim();
+      if (!nm) { toast("A hale needs a name", true); return; }
+      const old = h.name;
+      this.selHale = nm;
+      this.saveHouses(houses => {
+        const row = houses.find(x => x.name === old);
+        if (!row) return false;
+        row.name = nm;
+        row.function = $("#hp-fn").value.trim();
+        row.staff = $("#hp-st").value.trim();
+      }, `${nm} saved`);
+    };
+    $("#hp-del").onclick = () => {
+      const n = (h.npcs || []).length;
+      if (!confirm(`Remove ${h.name}?` +
+                   (n ? ` Its ${n} stationed NPC(s) become unassigned.` : "")))
+        return;
+      this.selHale = null;
+      this.saveHouses(houses => {
+        const i = houses.findIndex(x => x.name === h.name);
+        if (i >= 0) houses.splice(i, 1);
+      }, `${h.name} removed`);
+    };
+    $("#hp-close").onclick = () => { this.selHale = null; this.renderPanel(b, view); };
+  },
+  renderNpcPanel(box, b, view) {
+    const c = this.card(this.selNpc);
+    if (!c) { this.selNpc = null; this.renderPanel(b, view); return; }
+    const post = (b.houses || []).find(h => (h.npcs || []).includes(c.key));
+    box.innerHTML = `<div class="card"><h2>NPC — ${esc(c.name)}</h2>
+      <div class="npchead">
+        <div class="portrait" id="np-face">${esc(initials(c.name))}</div>
+        <div><div class="nm">${esc(c.name)}</div>
+          <div class="meta">${(c.titles || []).length ? esc(c.titles.join(", ")) + "<br>" : ""}
+            ${esc(c.affiliation || "")}</div></div>
+      </div>
+      <div class="frm">
+        <label>Post</label>
+        <select id="np-post">
+          <option value="">— off duty (unassign) —</option>
+          ${(b.houses || []).map(h => `<option ${post && post.name === h.name ? "selected" : ""}>${esc(h.name)}</option>`).join("")}
+        </select>
+        <label>Current task — one line, players read this</label>
+        <input type="text" id="np-task" maxlength="200" value="${esc(c.task || "")}"
+               placeholder="Mending the west net before the evening tide">
+        <label>Routine — one beat per line (dawn / noon / dusk…)</label>
+        <textarea id="np-routine" rows="4"
+          placeholder="Dawn — walks the salt line&#10;Noon — nets with the dock crew&#10;Dusk — first watch in Hale Kilo">${esc((c.routine || []).join("\n"))}</textarea>
+        <div class="btnrow">
+          <button class="btn primary" id="np-save">Save task &amp; routine</button>
+          <button class="btn" id="np-full">Full editor →</button>
+          <button class="btn" id="np-close">Close</button>
+        </div>
+        <p class="hint">Players see the task and routine on their base map —
+        they can move this NPC between hale, never rewrite these.</p>
+      </div></div>`;
+    if (c.gif) $("#np-face").innerHTML = `<img src="${esc(c.gif)}" alt="">`;
+    else if (c.image)
+      this.blob("/api/dash/npc-image?key=" + encodeURIComponent(c.key),
+                "npc:" + c.key)
+        .then(u => { const f = $("#np-face"); if (u && f) f.innerHTML = `<img src="${u}" alt="">`; });
+    $("#np-post").onchange = e => this.stationNpc(c.key, e.target.value || null);
+    $("#np-save").onclick = async () => {
+      try {
+        const routine = $("#np-routine").value.split("\n")
+          .map(s => s.trim()).filter(Boolean);
+        await api("/api/dash/npc", { key: c.key, task: $("#np-task").value,
+                                     routine });
+        toast(`${c.name} — task & routine saved`);
+        await this.load();
+      } catch (e2) { toast(e2.message, true); }
+    };
+    $("#np-full").onclick = () => {
+      Npcs.sel = c.key;
+      switchView("npcs");
+    };
+    $("#np-close").onclick = () => { this.selNpc = null; this.renderPanel(b, view); };
+  },
+  /* ---- details: the full record form (create + edit) ---- */
+  renderDetails(box, it, creating) {
     const places = Object.entries(this.data.places)
       .sort((a, b) => a[1].localeCompare(b[1]));
-    const assigned = new Set(this.houses.flatMap(h => h.npcs));
-    const roster = Object.entries(this.data.npcs || {})
-      .sort((a, b) => a[1].localeCompare(b[1]));
-    const haleCards = this.houses.map((h, i) => `
-      <div class="pcard" style="margin:10px 0;padding:12px 16px">
-        <div style="display:flex;gap:7px;align-items:center">
-          <input type="text" id="bh-name-${i}" value="${esc(h.name)}"
-                 placeholder="Hale name" style="flex:2;font-weight:700">
-          <input type="text" id="bh-func-${i}" value="${esc(h.function)}"
-                 placeholder="Function (Lookout, Comms loft…)" style="flex:3">
-          <button class="btn mini" id="bh-del-${i}" title="Remove this hale">✕</button>
-        </div>
-        <div style="margin-top:8px">${(h.npcs || []).map(k => `
-          <span class="chip">${esc(this.npcName(k))}
-            <a href="#" data-bnun="${i}:${esc(k)}" title="Unassign">✕</a></span>`).join(" ")
-          || "<span class='muted' style='font-size:12px'>No roster NPCs stationed.</span>"}
-        </div>
-        <div style="display:flex;gap:7px;margin-top:7px">
-          <select id="bh-add-${i}" style="flex:1;font-size:12px">
-            <option value="">— station an NPC here… —</option>
-            ${roster.map(([k, n]) => `<option value="${k}">${esc(n)}${assigned.has(k) ? " (moves them)" : ""}</option>`).join("")}
-          </select>
-          <input type="text" id="bh-staff-${i}" value="${esc(h.staff)}"
-                 placeholder="Other staff, free text (Waiāwī, watch crews…)"
-                 style="flex:2;font-size:12px">
-        </div>
-      </div>`).join("");
-    box.innerHTML = `
-      <h2>${this.creating ? "New base" : esc(it.name)}</h2>
+    box.innerHTML = `<div class="card">
+      <h2>${creating ? "New base" : "Details — " + esc(it.name)}</h2>
       <div class="frm">
         <div class="grid2">
           <div><label>Name</label>
@@ -2845,15 +3638,6 @@ const Bases = {
         <label>Description — what the base is, for anyone reading this tab</label>
         <textarea id="bf-desc" rows="4"
           placeholder="Whose base, where it stands, what holds it together…">${esc(it.desc || "")}</textarea>
-        <h2 style="margin-bottom:2px">Hale <span class="muted" style="font-size:12px">—
-          one card per working house; station roster NPCs with the picker
-          (assignments apply instantly on a saved base), keep flavor-only
-          names in the free-text staff box</span></h2>
-        <div id="bf-hales">${haleCards ||
-          "<p class='muted'>No hale yet — add the first one.</p>"}</div>
-        <div style="margin-top:6px">
-          <button class="btn mini" id="bf-haleadd">＋ Add hale</button>
-        </div>
         <label>DM notes — never shown to players</label>
         <textarea id="bf-dm" rows="4"
           placeholder="What this base means structurally; how it should fall if it falls…">${esc(it.dm || "")}</textarea>
@@ -2862,95 +3646,53 @@ const Bases = {
             <input type="text" id="bf-author" value="${esc(it.author || "")}"></div>
         </div>
         ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
+        <p class="hint">Hale live on the map — click one there to rename,
+        restaff, or remove it; ＋ Hale raises a new one.</p>
         <div class="btnrow">
-          <button class="btn primary" id="bf-save">${this.creating ? "Create base" : "Save base"}</button>
-          ${this.creating ? '<button class="btn" id="bf-cancel">Cancel</button>'
-                          : '<button class="btn danger" id="bf-del">Delete…</button>'}
+          <button class="btn primary" id="bf-save">${creating ? "Create base" : "Save details"}</button>
+          ${creating ? '<button class="btn" id="bf-cancel">Cancel</button>'
+                     : `<button class="btn" id="bf-back">← Back to the map</button>
+                        <button class="btn danger" id="bf-del">Delete…</button>`}
         </div>
-      </div>`;
-    const rerender = () => { this._draft = { ...it, ...this.formValues(it) };
-                             this.renderEditor(); };
-    this.houses.forEach((h, i) => {
-      $(`#bh-name-${i}`).oninput = e => { h.name = e.target.value; };
-      $(`#bh-func-${i}`).oninput = e => { h.function = e.target.value; };
-      $(`#bh-staff-${i}`).oninput = e => { h.staff = e.target.value; };
-      $(`#bh-del-${i}`).onclick = () => {
-        if ((h.npcs || []).length &&
-            !confirm(`Remove ${h.name || "this hale"}? Its ${h.npcs.length} stationed NPC(s) become unassigned.`))
-          return;
-        this.houses.splice(i, 1);
-        rerender();
-      };
-      $(`#bh-add-${i}`).onchange = e => {
-        const k = e.target.value;
-        if (!k) return;
-        if (this.creating || !h.name.trim()) {
-          // Not saved (or unnamed) — stage locally; the save persists it.
-          this.houses.forEach(x => x.npcs = (x.npcs || []).filter(q => q !== k));
-          h.npcs.push(k);
-          rerender();
-          return;
-        }
-        api("/api/dash/base-npc", { base: it.key, npc: k, house: h.name,
-                                    author: $("#bf-author").value.trim() })
-          .then(j => { this._draft = { ...it, ...this.formValues(it),
-                                       houses: j.houses };
-                       toast(`${this.npcName(k)} → ${h.name}`);
-                       this.renderEditor(); })
-          .catch(e2 => toast(e2.message, true));
-      };
-    });
-    box.querySelectorAll("[data-bnun]").forEach(a => a.onclick = ev => {
-      ev.preventDefault();
-      const [i, k] = a.dataset.bnun.split(/:(.+)/);
-      const h = this.houses[+i];
-      if (this.creating || !it.key) {
-        h.npcs = h.npcs.filter(q => q !== k);
-        rerender();
-        return;
-      }
-      api("/api/dash/base-npc", { base: it.key, npc: k, house: null,
-                                  author: $("#bf-author").value.trim() })
-        .then(j => { this._draft = { ...it, ...this.formValues(it),
-                                     houses: j.houses };
-                     toast(`${this.npcName(k)} unassigned`);
-                     this.renderEditor(); })
-        .catch(e2 => toast(e2.message, true));
-    });
-    $("#bf-haleadd").onclick = () => {
-      this.houses.push({ name: "", function: "", staff: "", npcs: [] });
-      rerender();
-    };
+      </div></div>`;
     $("#bf-save").onclick = () => {
       const author = $("#bf-author").value.trim();
       if (author) localStorage.setItem("ht_author", author);
       api("/api/dash/base", {
-        key: this.creating ? null : it.key,
-        ...this.formValues(it), author,
+        key: creating ? null : it.key,
+        name: $("#bf-name").value, team: $("#bf-team").value,
+        place: $("#bf-place").value, steward: $("#bf-steward").value,
+        status: $("#bf-status").value, desc: $("#bf-desc").value,
+        dm: $("#bf-dm").value, author,
+        // Houses travel UNTOUCHED on a details save — the map owns them.
+        houses: creating ? [] : (this.base().houses || []),
       }).then(j => {
-        toast(this.creating ? "Base created" : "Base saved");
+        toast(creating ? "Base created — raise its hale on the map" : "Details saved");
         this.creating = false;
+        this.details = false;
         this.sel = j.key;
         this.load();
       }).catch(e2 => toast(e2.message, true));
     };
-    if (this.creating) {
-      $("#bf-cancel").onclick = () => { this.creating = false; this._draft = null;
-                                        this.renderEditor(); };
+    if (creating) {
+      $("#bf-cancel").onclick = () => { this.creating = false; this.renderView(); };
       return;
     }
+    $("#bf-back").onclick = () => { this.details = false; this.renderView(); };
     $("#bf-del").onclick = () => {
       if (!confirm(`Delete the base “${it.name}”? This can't be undone.`))
         return;
       api("/api/dash/base-delete", { key: it.key })
-        .then(() => { toast("Deleted"); Bases.sel = null; Bases.load(); })
+        .then(() => { toast("Deleted"); Bases.sel = null; Bases.details = false;
+                      Bases.load(); })
         .catch(e2 => toast(e2.message, true));
     };
   },
 };
 $("#bsearch").oninput = () => Bases.renderList();
 $("#bnew").onclick = () => { Bases.creating = true; Bases.sel = null;
-                             Bases.renderList(); Bases.renderEditor(); };
+                             Bases.renderList(); Bases.renderView(); };
+
 
 /* ---------- boot ---------- */
 $("#cfgbtn").onclick = openGate;
@@ -2967,7 +3709,7 @@ $("#cfgbtn").onclick = openGate;
 }
 if (API) img.src = API + "/dash/underlay";
 if (!TOKEN) openGate();
-else refresh();
+else switchView("overview");
 setInterval(refresh, 8000);
 </script>
 </body>
