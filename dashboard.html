@@ -1818,6 +1818,7 @@ const Items = {
       row.className = "lrow" + (this.sel === it.key ? " sel" : "");
       const b = fxBadge(it);
       row.innerHTML = `<span class="nm">${esc(it.name)}</span>
+        ${it.rarity ? `<span class="fx" title="2026 push${it.tier ? " — tier " + it.tier : ""}">${esc(it.rarity)}</span>` : ""}
         ${it.roll_block ? `<span class="fx norolltag" title="${
             it.roll_block === "permanent"
               ? "Blocked in the bot's source — never rolled."
