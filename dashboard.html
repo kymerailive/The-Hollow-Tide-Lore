@@ -63,6 +63,47 @@
     #side .brand { justify-content: center; padding-bottom: 10px; }
   }
 
+  /* ---------- approvals ----------
+     Built phone-first: the whole point is ruling on a route from wherever you
+     are, so cards are single-column, buttons are thumb-sized (44px), and
+     nothing needs a hover state to be discoverable. */
+  .apvbadge { display: inline-block; min-width: 18px; padding: 0 5px;
+              margin-left: 7px; border-radius: 9px; background: #ef4444;
+              color: #fff; font-size: 11px; font-weight: 800;
+              text-align: center; line-height: 18px; }
+  #side .tab.active .apvbadge { background: rgba(0,0,0,.32); }
+  .apvlist { display: flex; flex-direction: column; gap: 12px;
+             width: 100%; max-width: 780px; }
+  .apvcard { background: var(--card); border: 1px solid var(--line);
+             border-radius: 14px; padding: 14px 15px; }
+  .apvcard.busy { opacity: .55; }
+  .apvhead { display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+             margin-bottom: 7px; }
+  .apvkind { font-size: 11.5px; font-weight: 800; letter-spacing: .4px;
+             text-transform: uppercase; color: var(--dim); }
+  .apvteam { font-size: 11.5px; color: var(--faint);
+             border: 1px solid var(--line2); border-radius: 7px;
+             padding: 1px 7px; }
+  .apvage { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+  .apvtitle { font-size: 15.5px; font-weight: 700; line-height: 1.35; }
+  .apvdetail { margin-top: 4px; font-size: 13.5px; color: var(--dim);
+               line-height: 1.45; overflow-wrap: anywhere; }
+  .apvmeta { margin-top: 5px; font-size: 12px; color: var(--faint); }
+  .apvbtns { display: flex; gap: 9px; margin-top: 13px; flex-wrap: wrap; }
+  .apvbtns .btn { flex: 1 1 auto; min-height: 44px; min-width: 108px;
+                  font-size: 14px; }
+  .apvempty { max-width: 560px; }
+  #toast { position: fixed; left: 50%; bottom: 22px; z-index: 200;
+           transform: translate(-50%, 22px); opacity: 0; pointer-events: none;
+           max-width: min(92vw, 620px); padding: 11px 17px; border-radius: 11px;
+           background: #10131c; border: 1px solid var(--line2);
+           color: var(--text); font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+           transition: opacity .18s, transform .18s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 560px) {
+    .apvbtns .btn { flex: 1 1 100%; }
+  }
+
   /* ---------- topbar ---------- */
   #topbar { position: sticky; top: 0; z-index: 60; display: flex;
             align-items: center; gap: 12px; padding: 12px 22px;
@@ -422,6 +463,7 @@
   </div>
   <nav>
     <span class="tab active" data-view="overview"><span class="ic">▦</span><span class="lb">Overview</span></span>
+    <span class="tab" data-view="approvals"><span class="ic">✅</span><span class="lb">Approvals<span id="apvcount" class="apvbadge" style="display:none">0</span></span></span>
     <span class="tab" data-view="map"><span class="ic">🗺</span><span class="lb">Map</span></span>
     <span class="tab" data-view="bases"><span class="ic">🏠</span><span class="lb">Bases</span></span>
     <span class="tab" data-view="players"><span class="ic">👥</span><span class="lb">Players</span></span>
@@ -452,6 +494,10 @@
 <main>
 <section class="view active" id="view-overview">
   <div id="ovbody" style="width:100%"><p class="muted">Loading…</p></div>
+</section>
+
+<section class="view" id="view-approvals">
+  <div id="apvbody" style="width:100%"><p class="muted">Loading…</p></div>
 </section>
 
 <section class="view" id="view-map">
@@ -789,6 +835,114 @@ async function api(path, body) {
   return j;
 }
 
+/* ================= APPROVALS =================
+   The dev queue: route requests, GPS encounters and NPC/narration drafts,
+   answered from the browser instead of hunting Discord desks. Every button
+   calls the same resolver the ✅ card calls, so the Discord channels keep
+   working exactly as before — this is a second door, not a second system. */
+const Approvals = {
+  rows: [], busy: null, timer: null,
+  async load(quiet) {
+    try { const j = await api("/api/dash/approvals"); this.rows = j.approvals || []; }
+    catch (e) { if (!quiet) $("#apvbody").innerHTML =
+      '<p class="muted">Can\'t reach the bot API.</p>'; return; }
+    this.badge();
+    if (Views.current === "approvals") this.render();
+  },
+  badge() {
+    const b = $("#apvcount"); if (!b) return;
+    b.textContent = this.rows.length;
+    b.style.display = this.rows.length ? "" : "none";
+  },
+  age(at, now) {
+    if (!at) return "";
+    const s = Math.max(0, Math.floor((now || Date.now() / 1000) - at));
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m";
+    if (s < 86400) return Math.floor(s / 3600) + "h";
+    return Math.floor(s / 86400) + "d";
+  },
+  render() {
+    const box = $("#apvbody");
+    if (!this.rows.length) {
+      box.innerHTML = '<div class="card apvempty"><h2>✅ Nothing waiting</h2>' +
+        '<p class="muted">Route requests, encounters and NPC drafts show up ' +
+        'here the moment players raise them. The Discord desks still work too.</p></div>';
+      return;
+    }
+    const LABEL = { travel: ["🧭", "Route"], encounter: ["📡", "Encounter"],
+                    draft: ["🎭", "Draft"] };
+    const now = Date.now() / 1000;
+    box.innerHTML = '<div class="apvlist">' + this.rows.map(r => {
+      const [ic, kind] = LABEL[r.queue] || ["•", r.queue];
+      const busy = this.busy === r.queue + ":" + r.key;
+      const btn = (act, lbl, cls) =>
+        '<button class="btn ' + cls + '" data-apv="' + act + '" data-q="' +
+        esc(r.queue) + '" data-k="' + esc(r.key) + '"' +
+        (busy ? " disabled" : "") + '>' + lbl + '</button>';
+      return '<div class="apvcard' + (busy ? " busy" : "") + '">' +
+        '<div class="apvhead"><span class="apvkind">' + ic + " " + kind +
+          '</span>' + (r.team ? '<span class="apvteam">' + esc(r.team) +
+          "</span>" : "") + '<span class="apvage">' + this.age(r.at, now) +
+          "</span></div>" +
+        '<div class="apvtitle">' + esc(r.title || "") + "</div>" +
+        (r.detail ? '<div class="apvdetail">' + esc(r.detail) + "</div>" : "") +
+        (r.meta ? '<div class="apvmeta">' + esc(r.meta) + "</div>" : "") +
+        '<div class="apvbtns">' +
+          btn("approve", busy ? "…" : "✅ Approve", "primary") +
+          btn("deny", "✕ Deny", "danger") +
+          ((r.actions || []).includes("reroll")
+            ? btn("reroll", "🔁 Reroll", "") : "") +
+        "</div></div>";
+    }).join("") + "</div>";
+  },
+  async act(queue, key, action) {
+    this.busy = queue + ":" + key; this.render();
+    try {
+      const j = await api("/api/dash/approval",
+        { queue, key, action, author: Approvals.who() });
+      this.busy = null;
+      this.rows = this.rows.filter(r => !(r.queue === queue && r.key === key));
+      this.badge(); this.render();
+      toast(j.result || "Done");
+    } catch (e) {
+      this.busy = null; this.render();
+      alert("Couldn't rule on that: " + e.message);
+    }
+    this.load(true);
+  },
+  who() {
+    let n = localStorage.getItem("ht_dev_name");
+    if (!n) {
+      n = (prompt("Your name — it goes in the audit log and on the card:") || "").trim();
+      if (n) localStorage.setItem("ht_dev_name", n);
+    }
+    return n || "dashboard";
+  },
+  start() {
+    if (this.timer) clearInterval(this.timer);
+    // Poll while the page is open so the badge is honest from any tab; the
+    // payload is small and the bot is on the LAN.
+    this.timer = setInterval(() => {
+      if (!document.hidden) this.load(true);
+    }, 15000);
+  },
+};
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("button[data-apv]");
+  if (!b || b.disabled) return;
+  Approvals.act(b.dataset.q, b.dataset.k, b.dataset.apv);
+});
+function toast(msg) {
+  let t = $("#toast");
+  if (!t) {
+    t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t);
+  }
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
 /* ---------- view switching ---------- */
 const Views = { current: "overview" };
 document.querySelectorAll(".tab[data-view]").forEach(t =>
@@ -803,6 +957,7 @@ function switchView(v) {
   $("#newplacebtn").style.display = v === "map" ? "" : "none";
   const meta = {
     overview: ["Overview", "the island at a glance"],
+    approvals: ["Approvals", "everything waiting on a dev"],
     map: ["Map", "live team positions"],
     players: ["Players", ""], npcs: ["NPCs", ""], items: ["Items", ""],
     quests: ["Questlines", ""], lines: ["Lines", "live state"],
@@ -815,6 +970,7 @@ function switchView(v) {
   $("#pagetitle").firstChild.textContent = ttl;
   $("#pagesub").textContent = sub ? " — " + sub : "";
   if (v === "overview") Overview.load();
+  if (v === "approvals") Approvals.load();
   if (v === "map") refresh();
   if (v === "players") Players.load();
   if (v === "npcs") Npcs.load();
@@ -3710,7 +3866,7 @@ $("#cfgbtn").onclick = openGate;
 }
 if (API) img.src = API + "/dash/underlay";
 if (!TOKEN) openGate();
-else switchView("overview");
+else { switchView("overview"); Approvals.load(true); Approvals.start(); }
 setInterval(refresh, 8000);
 </script>
 </body>
