@@ -89,6 +89,14 @@
   .apvdetail { margin-top: 4px; font-size: 13.5px; color: var(--dim);
                line-height: 1.45; overflow-wrap: anywhere; }
   .apvmeta { margin-top: 5px; font-size: 12px; color: var(--faint); }
+  /* Some rulings take a value the card can't guess — a proposed job needs its
+     tier and cap set BY THE DEV at the moment they approve it. The queue row
+     ships a `needs` list and these render it. */
+  .apvneeds { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .apvneed { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; }
+  .apvneed > span { font-size: 10.5px; text-transform: uppercase;
+                    letter-spacing: .9px; color: var(--dim); font-weight: 600; }
+  .apvneed select, .apvneed input { width: 100%; min-height: 40px; }
   .apvbtns { display: flex; gap: 9px; margin-top: 13px; flex-wrap: wrap; }
   .apvbtns .btn { flex: 1 1 auto; min-height: 44px; min-width: 108px;
                   font-size: 14px; }
@@ -102,6 +110,7 @@
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (max-width: 560px) {
     .apvbtns .btn { flex: 1 1 100%; }
+    .apvneed { flex: 1 1 100%; }
   }
 
   /* ---------- topbar ---------- */
@@ -956,12 +965,20 @@ async function api(path, body) {
    working exactly as before — this is a second door, not a second system. */
 const Approvals = {
   rows: [], busy: null, timer: null,
+  // What a dev has typed into a row's `needs` fields, keyed queue:key. Held
+  // out here rather than read off the DOM because render() rebuilds the whole
+  // list every poll — a half-filled tier must survive that.
+  vals: {},
   async load(quiet) {
     try { const j = await api("/api/dash/approvals"); this.rows = j.approvals || []; }
     catch (e) { if (!quiet) $("#apvbody").innerHTML =
       '<p class="muted">Can\'t reach the bot API.</p>'; return; }
     this.badge();
-    if (Views.current === "approvals") this.render();
+    // Never re-render out from under a dev who is mid-way through filling a
+    // ruling's fields — the poll would take the focus with it.
+    if (Views.current === "approvals" &&
+        !(document.activeElement && document.activeElement.closest("[data-need]")))
+      this.render();
   },
   badge() {
     const b = $("#apvcount"); if (!b) return;
@@ -984,7 +1001,7 @@ const Approvals = {
         'here the moment players raise them. The Discord desks still work too.</p></div>';
       return;
     }
-    const LABEL = { forge: ["🜲", "Forge"],
+    const LABEL = { forge: ["🜲", "Forge"], job: ["🧰", "Job"],
                     travel: ["🧭", "Route"], encounter: ["📡", "Encounter"],
                     draft: ["🎭", "Draft"] };
     const now = Date.now() / 1000;
@@ -995,6 +1012,7 @@ const Approvals = {
         '<button class="btn ' + cls + '" data-apv="' + act + '" data-q="' +
         esc(r.queue) + '" data-k="' + esc(r.key) + '"' +
         (busy ? " disabled" : "") + '>' + lbl + '</button>';
+      const needs = this.needFields(r, busy);
       return '<div class="apvcard' + (busy ? " busy" : "") + '">' +
         '<div class="apvhead"><span class="apvkind">' + ic + " " + kind +
           '</span>' + (r.team ? '<span class="apvteam">' + esc(r.team) +
@@ -1003,6 +1021,7 @@ const Approvals = {
         '<div class="apvtitle">' + esc(r.title || "") + "</div>" +
         (r.detail ? '<div class="apvdetail">' + esc(r.detail) + "</div>" : "") +
         (r.meta ? '<div class="apvmeta">' + esc(r.meta) + "</div>" : "") +
+        (needs ? '<div class="apvneeds">' + needs + "</div>" : "") +
         '<div class="apvbtns">' +
           btn("approve", busy ? "…" : "✅ Approve", "primary") +
           btn("deny", "✕ Deny", "danger") +
@@ -1011,12 +1030,48 @@ const Approvals = {
         "</div></div>";
     }).join("") + "</div>";
   },
+  /* The inputs a row asks for. A `needs` entry is {field, label} plus either
+     `options` (a picker) or `number` (a count, with an optional default). */
+  needFields(r, busy) {
+    const held = this.vals[r.queue + ":" + r.key] || {};
+    return (r.needs || []).map(n => {
+      const cur = held[n.field];
+      const at = ' data-need="' + esc(n.field) + '" data-q="' + esc(r.queue) +
+                 '" data-k="' + esc(r.key) + '"' + (busy ? " disabled" : "");
+      const ctl = (n.options || []).length
+        ? "<select" + at + '><option value="">choose…</option>' +
+          n.options.map(o => '<option value="' + esc(o) + '"' +
+            (String(cur ?? "") === String(o) ? " selected" : "") + ">" +
+            esc(o) + "</option>").join("") + "</select>"
+        : "<input type=" + (n.number ? '"number" min="0"' : '"text"') + at +
+          ' value="' + esc(cur ?? n.default ?? "") + '">';
+      return '<label class="apvneed"><span>' + esc(n.label || n.field) +
+             "</span>" + ctl + "</label>";
+    }).join("");
+  },
   async act(queue, key, action) {
+    const row = this.rows.find(r => r.queue === queue && r.key === key);
+    const body = { queue, key, action };
+    // Only an approval carries the extra fields — a denial rules on the
+    // proposal as written and needs nothing set.
+    if (action === "approve") {
+      const held = this.vals[queue + ":" + key] || {};
+      for (const n of (row && row.needs) || []) {
+        const v = held[n.field] ?? n.default ?? "";
+        if (String(v) === "" && (n.options || []).length) {
+          toast("Set the " + String(n.label || n.field).toLowerCase() +
+                " before approving this one");
+          return;
+        }
+        body[n.field] = v;
+      }
+    }
+    body.author = Approvals.who();
     this.busy = queue + ":" + key; this.render();
     try {
-      const j = await api("/api/dash/approval",
-        { queue, key, action, author: Approvals.who() });
+      const j = await api("/api/dash/approval", body);
       this.busy = null;
+      delete this.vals[queue + ":" + key];
       this.rows = this.rows.filter(r => !(r.queue === queue && r.key === key));
       this.badge(); this.render();
       toast(j.result || "Done");
@@ -1048,6 +1103,15 @@ document.addEventListener("click", ev => {
   if (!b || b.disabled) return;
   Approvals.act(b.dataset.q, b.dataset.k, b.dataset.apv);
 });
+// Every keystroke in a `needs` field is remembered, so the 15 s poll's
+// re-render can't wipe a tier the dev has already picked.
+["input", "change"].forEach(evt => document.addEventListener(evt, ev => {
+  const f = ev.target.closest("[data-need]");
+  if (!f) return;
+  const slot = Approvals.vals[f.dataset.q + ":" + f.dataset.k] ||
+               (Approvals.vals[f.dataset.q + ":" + f.dataset.k] = {});
+  slot[f.dataset.need] = f.value;
+}));
 function toast(msg) {
   let t = $("#toast");
   if (!t) {
