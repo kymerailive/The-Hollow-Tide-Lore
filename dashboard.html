@@ -1035,7 +1035,10 @@ const Approvals = {
   needFields(r, busy) {
     const held = this.vals[r.queue + ":" + r.key] || {};
     return (r.needs || []).map(n => {
-      const cur = held[n.field];
+      // Untouched, a field shows the row's default — for a job that is the
+      // tier its author asked for. Once a dev touches it, theirs wins, and an
+      // emptied picker stays empty rather than springing back.
+      const cur = n.field in held ? held[n.field] : n.default;
       const at = ' data-need="' + esc(n.field) + '" data-q="' + esc(r.queue) +
                  '" data-k="' + esc(r.key) + '"' + (busy ? " disabled" : "");
       const ctl = (n.options || []).length
@@ -1044,7 +1047,7 @@ const Approvals = {
             (String(cur ?? "") === String(o) ? " selected" : "") + ">" +
             esc(o) + "</option>").join("") + "</select>"
         : "<input type=" + (n.number ? '"number" min="0"' : '"text"') + at +
-          ' value="' + esc(cur ?? n.default ?? "") + '">';
+          ' value="' + esc(cur ?? "") + '">';
       return '<label class="apvneed"><span>' + esc(n.label || n.field) +
              "</span>" + ctl + "</label>";
     }).join("");
@@ -1057,7 +1060,7 @@ const Approvals = {
     if (action === "approve") {
       const held = this.vals[queue + ":" + key] || {};
       for (const n of (row && row.needs) || []) {
-        const v = held[n.field] ?? n.default ?? "";
+        const v = (n.field in held ? held[n.field] : n.default) ?? "";
         if (String(v) === "" && (n.options || []).length) {
           toast("Set the " + String(n.label || n.field).toLowerCase() +
                 " before approving this one");
