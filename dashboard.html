@@ -122,6 +122,62 @@
   #cfgbtn { padding: 5px 10px; }
   #arrangebtn.on { border-color: var(--gold); color: var(--gold);
                    background: rgba(240,179,76,.08); }
+
+  /* ---------- island switch ----------
+     Two islands, one scope. A <select> hides the option you are NOT on, which
+     is exactly what has to stay visible here: the dominant failure mode is
+     editing the wrong island without noticing. So it borrows the sidebar
+     tab's own vocabulary — pill, gradient when active — shrunk into the
+     topbar. Reach for a <select> at four islands; two or three read as a
+     switch. */
+  #islandsw { display: flex; gap: 3px; padding: 3px; background: #0d1020;
+              border: 1px solid var(--line2); border-radius: 11px; }
+  #islandsw button { background: none; border: 0; color: var(--dim);
+              border-radius: 8px; padding: 4px 12px; font: inherit;
+              font-size: 12.5px; font-weight: 600; cursor: pointer;
+              white-space: nowrap; transition: color .13s, background .13s; }
+  #islandsw button:hover { color: var(--text); }
+  #islandsw button.on { background: var(--grad); color: #fff;
+              box-shadow: 0 3px 12px rgba(124,92,255,.32); }
+  #islandsw button .isldot { opacity: .75; margin-left: 6px; font-size: 10px; }
+  /* Away from the home island every screen says so. A choice made last week
+     and left sticky must never read as Motu Lani at a glance. */
+  body.away #topbar { box-shadow: inset 0 3px 0 var(--accent2); }
+  body.away #islandsw { border-color: var(--accent2); }
+  body.away #islandsw button.on {
+              background: linear-gradient(135deg,#4dc3ff,#2a8fa3);
+              box-shadow: 0 3px 12px rgba(77,195,255,.3); }
+  .scopetag { font-size: 10px; font-weight: 700; letter-spacing: .8px;
+              text-transform: uppercase; color: var(--faint); padding: 2px 8px;
+              border: 1px solid var(--line2); border-radius: 999px;
+              margin-left: 10px; vertical-align: 2px; white-space: nowrap; }
+  .scopetag.here { color: var(--accent2); border-color: var(--accent2); }
+  @media (max-width: 940px) { #islandsw button { padding: 4px 8px; }
+                              .scopetag { display: none !important; } }
+
+  /* ---------- map: the island has no art yet ---------- */
+  #mapempty { position: absolute; inset: 14px; display: flex; gap: 12px;
+              flex-direction: column; align-items: center;
+              justify-content: center; text-align: center; padding: 28px;
+              color: var(--dim); border: 2px dashed var(--line2);
+              border-radius: var(--radius); }
+  #mapempty h3 { font-size: 15.5px; color: var(--text); }
+  #mapempty p { max-width: 48ch; }
+  #mapempty code { background: var(--panel2); border: 1px solid var(--line);
+              border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+  /* ---------- island panel on the Map tab ---------- */
+  .islcard .pill { display: inline-block; font-size: 10.5px; font-weight: 800;
+              letter-spacing: .7px; text-transform: uppercase; padding: 2px 9px;
+              border-radius: 999px; }
+  .islcard .pill.live { color: #7ee08a; border: 1px solid #2f6b3c;
+              background: rgba(46,120,64,.16); }
+  .islcard .pill.off { color: var(--gold); border: 1px solid #6b5527;
+              background: rgba(240,179,76,.12); }
+  .unplaced { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .unplaced span { font-size: 11.5px; padding: 3px 9px; border-radius: 8px;
+              border: 1px dashed var(--line2); color: var(--dim);
+              cursor: grab; background: var(--panel2); }
+  .unplaced span:hover { color: var(--text); border-color: var(--accent2); }
   body.arrange .place .dot { outline: 2px dashed var(--gold);
                              outline-offset: 2px; cursor: grab; }
   #status { color: var(--dim); font-size: 12px;
@@ -484,9 +540,15 @@
 </aside>
 <div id="maincol">
 <div id="topbar">
+  <!-- #scopetag and #islandsw are SIBLINGS of #pagetitle, never children:
+       switchView writes the title through $("#pagetitle").firstChild, so
+       anything inserted as its first child silently breaks the title on
+       every tab. -->
   <span id="pagetitle">Overview<small id="pagesub"></small></span>
+  <span id="scopetag" class="scopetag" style="display:none"></span>
   <span style="flex:1"></span>
-  <button id="newplacebtn" title="Add a new place to the island" style="display:none">＋ Place</button>
+  <div id="islandsw" role="group" aria-label="Island" style="display:none"></div>
+  <button id="newplacebtn" title="Add a new place to this island" style="display:none">＋ Place</button>
   <button id="arrangebtn" title="Drag place markers to reposition them on the map" style="display:none">✥ Arrange</button>
   <button id="cfgbtn" title="Bot API address & token">⚙</button>
 </div>
@@ -503,11 +565,16 @@
 <section class="view" id="view-map">
   <div id="mapwrap">
     <div id="zoomer">
-      <img id="underlay" src="/dash/underlay" alt="Motu Lani">
+      <!-- No static src: it carries no island, so a sticky Te Motu Pūrākau
+           choice would paint Motu Lani's art for a frame before the registry
+           resolves. The JS points this, always. -->
+      <img id="underlay" alt="the island map">
       <div id="overlay"></div>
     </div>
+    <div id="mapempty" style="display:none"></div>
   </div>
   <aside>
+    <div class="card islcard" id="islandcard" style="display:none"></div>
     <div class="card">
       <h2>Teams</h2>
       <div id="teams"></div>
@@ -698,6 +765,29 @@ let teamColor = {};        // gid -> color
 let armedTeam = null;      // gid armed for whole-team move
 let drag = null;           // any in-progress drag blocks map repaints
 
+/* ---------- island scope ----------
+   Which island every place-scoped tab is looking at. Sticky in localStorage,
+   because laying out a new island takes several sittings and re-picking it
+   each time would be miserable — which is exactly why body.away marks every
+   screen when the choice is not the home island. A ?island= in the URL wins,
+   so a link can point at one specific map. */
+let ISLANDS = [];          // last /api/dash/islands payload
+let ISLAND_HOME = "motu-lani";
+let ISLAND = (new URLSearchParams(location.search).get("island")
+              || localStorage.getItem("ht_island") || "");
+// Every place-scoped request appends this. An EMPTY string means "no island
+// param at all", which every handler answers exactly as it did before the
+// switch existed — that is what keeps an older tab, and the tabs with no
+// island of their own, working unchanged.
+const isl = () => (ISLAND && ISLAND !== ISLAND_HOME
+                   ? "island=" + encodeURIComponent(ISLAND) : "");
+const islq = p => { const q = isl(); return !q ? p : p + (p.includes("?") ? "&" : "?") + q; };
+// Tabs the switch actually rescopes. Everything else is global on purpose:
+// an approval that vanished because a dev was scoped to the wrong island is
+// an unanswered travel request, and that one is player-visible.
+const ISLAND_SCOPED = new Set(["map", "locations", "regions", "quests",
+                               "events", "bases"]);
+
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -809,9 +899,28 @@ async function saveToken() {
   localStorage.setItem("ht_token", TOKEN);
   localStorage.setItem("ht_api_base", API);
   $("#tokengate").style.display = "none";
-  img.src = API + "/dash/underlay";
-  refresh();
-  switchView(Views.current);
+  loadIslands().then(() => { loadUnderlay(); refresh();
+                             switchView(Views.current); });
+}
+
+/* The home island's art comes from the open route (a plain <img src>). Every
+   other island's comes from the GUARDED twin, which needs the Authorization
+   header — so it is fetched and turned into an object URL, the same pattern
+   the region and base map previews already use. */
+let _underlayURL = null;
+async function loadUnderlay() {
+  if (_underlayURL) { URL.revokeObjectURL(_underlayURL); _underlayURL = null; }
+  if (!ISLAND || ISLAND === ISLAND_HOME) { img.src = API + "/dash/underlay"; return; }
+  try {
+    const r = await fetch(API + "/api/dash/underlay?island="
+                          + encodeURIComponent(ISLAND),
+                          { headers: { "Authorization": "Bearer " + TOKEN } });
+    if (!r.ok) throw new Error(String(r.status));
+    _underlayURL = URL.createObjectURL(await r.blob());
+    img.src = _underlayURL;
+  } catch (e) {
+    img.removeAttribute("src");   // renderMapEmpty draws the placeholder
+  }
 }
 function openGate() {
   $("#apiin").value = API || API_FALLBACK;
@@ -870,7 +979,8 @@ const Approvals = {
         'here the moment players raise them. The Discord desks still work too.</p></div>';
       return;
     }
-    const LABEL = { travel: ["🧭", "Route"], encounter: ["📡", "Encounter"],
+    const LABEL = { forge: ["🜲", "Forge"],
+                    travel: ["🧭", "Route"], encounter: ["📡", "Encounter"],
                     draft: ["🎭", "Draft"] };
     const now = Date.now() / 1000;
     box.innerHTML = '<div class="apvlist">' + this.rows.map(r => {
@@ -943,6 +1053,89 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.remove("show"), 3200);
 }
 
+/* Every map/move goes through here. The server refuses a crossing outright
+   and says so; we surface that as a second, explicit confirm naming both
+   islands. A team drag selects every player on the team, so one mis-drop
+   would otherwise relocate a whole live team somewhere they cannot walk
+   back from. */
+function moveOnMap(body, okMsg, done, undo) {
+  const after = done || refresh;
+  const fail = e => { toast(e.message, true); if (undo) undo(); };
+  const send = extra => api("/api/map/move", { ...body, ...extra })
+    .then(r => { toast(okMsg(r)); after(); });
+  return send().catch(e => {
+    const m = /Resend with confirm_island=(\S+)/.exec(e.message || "");
+    if (!m) return fail(e);
+    if (!confirm(e.message.replace(/ Resend with.*$/, "")
+                 + "\n\nGo ahead and move them across?")) { if (undo) undo(); return; }
+    return send({ confirm_island: m[1] }).catch(fail);
+  });
+}
+
+/* ---------- island switch ---------- */
+async function loadIslands() {
+  let j;
+  try { j = await api("/api/dash/islands"); }
+  catch (e) { return; }                   // no switch beats a broken switch
+  ISLANDS = j.islands || [];
+  ISLAND_HOME = j.default || "motu-lani";
+  if (!ISLANDS.some(i => i.key === ISLAND)) ISLAND = ISLAND_HOME;
+  renderIslandSwitch();
+  paintScope();
+  (j.notes || []).forEach(n => toast("Island boot: " + n));
+}
+function renderIslandSwitch() {
+  const box = $("#islandsw");
+  if (ISLANDS.length < 2) { box.style.display = "none"; return; }
+  box.style.display = "";
+  box.innerHTML = ISLANDS.map(i => {
+    // A dot only where it means something: the home island is always live, so
+    // marking it would be noise. An inactive island says so on every screen.
+    const dot = i.home ? "" : (i.active
+      ? '<span class="isldot" title="in the live travel graph">●</span>'
+      : '<span class="isldot" title="not in the travel graph yet">○</span>');
+    return '<button data-island="' + esc(i.key) + '"' +
+      (i.key === ISLAND ? ' class="on"' : "") +
+      ' title="' + esc(i.places + " places · " + i.pinned + " pinned" +
+                       (i.active ? "" : " · not active")) + '">' +
+      esc(i.name) + dot + "</button>";
+  }).join("");
+  box.querySelectorAll("button[data-island]").forEach(b =>
+    b.onclick = () => setIsland(b.dataset.island));
+}
+function setIsland(k) {
+  if (k === ISLAND) return;
+  ISLAND = k;
+  localStorage.setItem("ht_island", k);
+  renderIslandSwitch();
+  paintScope();
+  arrange = false;                 // an in-progress layout belongs to the map
+  document.body.classList.remove("arrange");   // you just left
+  $("#arrangebtn").classList.remove("on");
+  loadUnderlay();
+  // Repaint whatever tab is open. Global tabs are reloaded too — cheap, and
+  // it keeps the two surfaces from disagreeing after a place edit.
+  switchView(Views.current);
+}
+function islandName(k) {
+  const i = ISLANDS.find(x => x.key === k);
+  return i ? i.name : k;
+}
+function paintScope() {
+  const away = ISLAND && ISLAND !== ISLAND_HOME;
+  document.body.classList.toggle("away", !!away);
+  document.title = away ? islandName(ISLAND) + " — LNK Mini" : "LNK Mini dashboard";
+  const tag = $("#scopetag");
+  if (!tag) return;
+  if (ISLANDS.length < 2) { tag.style.display = "none"; return; }
+  // The tag answers the question a dev has on every tab: is this list scoped,
+  // or am I looking at a stale one?
+  const scoped = ISLAND_SCOPED.has(Views.current);
+  tag.style.display = "";
+  tag.className = "scopetag" + (scoped && away ? " here" : "");
+  tag.textContent = scoped ? islandName(ISLAND) : "both islands";
+}
+
 /* ---------- view switching ---------- */
 const Views = { current: "overview" };
 document.querySelectorAll(".tab[data-view]").forEach(t =>
@@ -969,6 +1162,7 @@ function switchView(v) {
   const [ttl, sub] = meta[v] || [v, ""];
   $("#pagetitle").firstChild.textContent = ttl;
   $("#pagesub").textContent = sub ? " — " + sub : "";
+  paintScope();
   if (v === "overview") Overview.load();
   if (v === "approvals") Approvals.load();
   if (v === "map") refresh();
@@ -1120,9 +1314,8 @@ function placeClicked(key) {
   if (armedTeam) {
     const name = state.teams[armedTeam];
     if (confirm(`Move ALL of ${name} to ${p.name}?`)) {
-      api("/api/map/move", { team: armedTeam, place: key })
-        .then(r => { toast(`Moved ${r.moved} player(s) to ${p.name}`); refresh(); })
-        .catch(e => toast(e.message, true));
+      moveOnMap({ team: armedTeam, place: key },
+                r => `Moved ${r.moved} player(s) to ${p.name}`);
     }
     armedTeam = null;
     render();
@@ -1289,10 +1482,10 @@ function startDrag(e, target, el, label) {
     const near = nearestPlace(canvasXY(ev), 55);
     drag = null;
     if (!near) { render(); return; }
-    api("/api/map/move", { ...target, place: near })
-      .then(r => { toast(`${label} → ${state.places[near].name}` +
-                         (r.moved > 1 ? ` (${r.moved} players)` : "")); refresh(); })
-      .catch(err => { toast(err.message, true); render(); });
+    moveOnMap({ ...target, place: near },
+              r => `${label} → ${state.places[near].name}` +
+                   (r.moved > 1 ? ` (${r.moved} players)` : ""),
+              null, render);      // undo: snap the dragged pawn back
   };
 }
 let arrange = false;
@@ -1327,12 +1520,112 @@ function startPlaceDrag(e, key, el) {
       .catch(err => { toast(err.message, true); render(); });
   };
 }
+/* A place from the unplaced tray, dropped onto the map, gets its first
+   coordinate. Same endpoint as an Arrange drag — the server takes the island
+   from the place itself, so there is nothing to keep in sync here. */
+wrap.addEventListener("dragover", ev => {
+  if ((ev.dataTransfer.types || []).includes("text/plain")) ev.preventDefault();
+});
+wrap.addEventListener("drop", ev => {
+  const raw = ev.dataTransfer.getData("text/plain") || "";
+  if (!raw.startsWith("unplaced:")) return;
+  ev.preventDefault();
+  const key = raw.slice(9);
+  const xy = canvasXY(ev);
+  api("/api/map/place-coord", {
+    place: key,
+    x: Math.round(Math.min(Math.max(xy.x, 0), state.canvas.w)),
+    y: Math.round(Math.min(Math.max(xy.y, 0), state.canvas.h)),
+  }).then(() => { toast(key + " placed"); refresh(); })
+    .catch(err => toast(err.message, true));
+});
+
+/* The map has four states, and only one of them is a map: art + pins, art but
+   nothing pinned, no art yet, and an island whose seed file failed to load.
+   The middle two are what a dev actually looks at while building an island,
+   so they say what to do next rather than showing an empty rectangle. */
+function renderIslandCard() {
+  const card = $("#islandcard");
+  if (!card) return;
+  // The home island needs no panel — it is always live and always laid out.
+  if (ISLANDS.length < 2 || state.island === ISLAND_HOME) {
+    card.style.display = "none"; return;
+  }
+  card.style.display = "";
+  const up = state.unplaced || [];
+  card.innerHTML =
+    "<h2>" + esc(islandName(state.island)) + " " +
+      '<span class="pill ' + (state.active ? "live" : "off") + '">' +
+      (state.active ? "in play" : "not active") + "</span></h2>" +
+    '<p class="hint" style="margin-top:8px">' +
+      (state.active
+        ? "Its places are in the live travel graph. Players standing here can "
+          + "walk between them, and nobody on the other island can see them."
+        : "Authored but not in the travel graph. Nobody can walk here, route "
+          + "here, or name it — not even a dev — until you activate it.") +
+    "</p>" +
+    (up.length
+      ? '<p class="hint" style="margin-top:10px"><b>' + up.length +
+        " with no position</b> — drag each onto the map:</p>" +
+        '<div class="unplaced">' + up.map(k =>
+          '<span draggable="true" data-unplaced="' + esc(k) + '">' +
+          esc(k) + "</span>").join("") + "</div>"
+      : "") +
+    '<button class="btn ' + (state.active ? "danger" : "primary") +
+      '" id="islandtoggle" style="margin-top:12px">' +
+      (state.active ? "Deactivate island" : "Activate island") + "</button>";
+  const btn = $("#islandtoggle");
+  if (btn) btn.onclick = () => toggleIsland(state.island, !state.active);
+  card.querySelectorAll("[data-unplaced]").forEach(el =>
+    el.addEventListener("dragstart", ev =>
+      ev.dataTransfer.setData("text/plain", "unplaced:" + el.dataset.unplaced)));
+}
+async function toggleIsland(slug, want) {
+  if (!confirm(want
+      ? "Activate " + islandName(slug) + "?\n\nIts places join the live travel "
+        + "graph — routable, autocompletable and placeable. Nobody is moved."
+      : "Deactivate " + islandName(slug) + "?\n\nIts places leave the travel "
+        + "graph. This is refused if anyone is standing there.")) return;
+  try {
+    const j = await api("/api/dash/island",
+      { island: slug, active: want, by: Approvals.who() });
+    toast(islandName(slug) + (j.active ? " activated" : " deactivated")
+          + " — " + j.places + " places");
+    await loadIslands();
+    refresh();
+  } catch (e) { alert("Couldn't switch that island: " + e.message); }
+}
+function renderMapChrome() {
+  renderIslandCard();
+  const box = $("#mapempty");
+  const hasArt = !!state.underlay;
+  $("#zoomer").style.display = hasArt ? "" : "none";
+  box.style.display = hasArt ? "none" : "";
+  // Arrange needs something to arrange against.
+  const ab = $("#arrangebtn");
+  ab.disabled = !hasArt;
+  ab.title = hasArt ? "Drag place markers to reposition them on the map"
+                    : "Upload the island's map image first — there's nothing "
+                      + "to position against yet";
+  if (!hasArt) {
+    box.innerHTML = state.loaded === false
+      ? "<h3>" + esc(islandName(state.island)) + " didn't load</h3>" +
+        "<p>Its seed file couldn't be parsed, so it has no places. Check the "
+        + "bot log, fix the file, and restart.</p>"
+      : "<h3>No map image for " + esc(islandName(state.island)) + " yet</h3>" +
+        "<p>Drop the artwork in as <code>map/"
+        + esc(state.underlay_name || "the island's png") + "</code> and reload. "
+        + "Its " + (state.unplaced || []).length + " places are already here — "
+        + "they just have nowhere to sit.</p>";
+  }
+}
 async function refresh() {
   if (Views.current === "map") {
     if (drag) return;
     try {
-      state = await api("/api/map");
+      state = await api(islq("/api/map"));
       wrap.style.aspectRatio = `${state.canvas.w} / ${state.canvas.h}`;
+      renderMapChrome();
       render();
       setStatus(true);
     } catch (e) {
@@ -1542,10 +1835,9 @@ const Players = {
     const locBtn = $("#pf-locgo");
     if (locBtn) locBtn.onclick = () => {
       const place = $("#pf-loc").value || null;
-      api("/api/map/move", { player_id: p.id, place })
-        .then(() => { toast(place ? `${p.name} moved` : `${p.name} taken off the map`);
-                      Players.load(); })
-        .catch(e => toast(e.message, true));
+      moveOnMap({ player_id: p.id, place },
+                () => place ? `${p.name} moved` : `${p.name} taken off the map`,
+                () => Players.load());
     };
     // Gif by FILE. Sent base64 over the same JSON+auth path as everything else;
     // the bot stores it under player_gifs/ and attaches it to every embed, so
@@ -1703,9 +1995,8 @@ const Players = {
       const place = $("#tf-loc").value;
       if (!place) return;
       if (!confirm(`Move ALL of ${tname} there?`)) return;
-      api("/api/map/move", { team: gid, place })
-        .then(r => { toast(`Moved ${r.moved} player(s)`); Players.load(); })
-        .catch(e => toast(e.message, true));
+      moveOnMap({ team: gid, place }, r => `Moved ${r.moved} player(s)`,
+                () => Players.load());
     };
     $("#tf-xfer").onclick = () => {
       const to = $("#tf-xferteam").value;
@@ -2107,7 +2398,7 @@ const Quests = {
   data: null, sel: null, creating: false,
   ORDER: ["active", "draft", "completed", "archived"],
   async load() {
-    try { this.data = await api("/api/dash/quests"); }
+    try { this.data = await api(islq("/api/dash/quests")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
@@ -2424,7 +2715,7 @@ $("#lnsearch").oninput = () => Lines.renderList();
 const Events = {
   data: null, sel: null, creating: false,
   async load() {
-    try { this.data = await api("/api/dash/events"); }
+    try { this.data = await api(islq("/api/dash/events")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
@@ -2739,7 +3030,7 @@ const Sites = {
 const Regions = {
   data: null, sel: null, creating: false, imgUrl: null, flds: [], _draft: null,
   async load() {
-    try { this.data = await api("/api/dash/regions"); }
+    try { this.data = await api(islq("/api/dash/regions")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
@@ -2964,7 +3255,7 @@ $("#rnew").onclick = () => { Regions.creating = true; Regions.sel = null;
 const Locations = {
   data: null, sel: null, imgUrl: null,
   async load() {
-    try { this.data = await api("/api/dash/locations"); }
+    try { this.data = await api(islq("/api/dash/locations")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
@@ -3251,7 +3542,7 @@ const Bases = {
   benchQ: "", view: { k: 1, tx: 0, ty: 0 },
   _drag: null, _blobs: {}, _sig: "",
   async load() {
-    try { this.data = await api("/api/dash/bases"); }
+    try { this.data = await api(islq("/api/dash/bases")); }
     catch (e) { return; }
     this._sig = JSON.stringify(this.data.bases);
     this.renderList();
@@ -3265,7 +3556,7 @@ const Bases = {
     if (ae && $("#bedit").contains(ae) &&
         /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
     let fresh;
-    try { fresh = await api("/api/dash/bases"); }
+    try { fresh = await api(islq("/api/dash/bases")); }
     catch (e) { if (e.message !== "unauthorized") setStatus(false); return; }
     setStatus(true);
     const sig = JSON.stringify(fresh.bases);
@@ -3864,9 +4155,18 @@ $("#cfgbtn").onclick = openGate;
     history.replaceState(null, "", location.pathname + location.search);
   }
 }
-if (API) img.src = API + "/dash/underlay";
 if (!TOKEN) openGate();
-else { switchView("overview"); Approvals.load(true); Approvals.start(); }
+else {
+  // The registry answers first: it decides which island is current, and
+  // therefore which artwork to fetch. Painting the map before that would show
+  // the home island for a frame to a dev whose sticky choice is elsewhere.
+  loadIslands().then(() => {
+    loadUnderlay();
+    switchView("overview");
+    Approvals.load(true);
+    Approvals.start();
+  });
+}
 setInterval(refresh, 8000);
 </script>
 </body>
