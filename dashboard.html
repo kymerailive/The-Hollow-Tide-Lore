@@ -152,6 +152,11 @@
               border: 1px solid var(--line2); border-radius: 999px;
               margin-left: 10px; vertical-align: 2px; white-space: nowrap; }
   .scopetag.here { color: var(--accent2); border-color: var(--accent2); }
+  /* A record on no island at all — shown under every island, never hidden. */
+  .nowhere { font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+             text-transform: uppercase; color: var(--faint);
+             border: 1px solid var(--line2); border-radius: 999px;
+             padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
   @media (max-width: 940px) { #islandsw button { padding: 4px 8px; }
                               .scopetag { display: none !important; } }
 
@@ -786,7 +791,7 @@ const islq = p => { const q = isl(); return !q ? p : p + (p.includes("?") ? "&" 
 // an approval that vanished because a dev was scoped to the wrong island is
 // an unanswered travel request, and that one is player-visible.
 const ISLAND_SCOPED = new Set(["map", "locations", "regions", "quests",
-                               "events", "bases"]);
+                               "events", "bases", "players", "npcs"]);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
@@ -1112,6 +1117,17 @@ function setIsland(k) {
   arrange = false;                 // an in-progress layout belongs to the map
   document.body.classList.remove("arrange");   // you just left
   $("#arrangebtn").classList.remove("on");
+  // A selection belongs to the island it was made on. Left alone, the list
+  // reloads scoped but the editor pane keeps showing the record you had open
+  // — and a save from there would land on the island you just left, with the
+  // place picker now offering a different island's places.
+  [Players, Npcs, Bases, Locations, Regions, Quests, Events].forEach(tab => {
+    if (!tab) return;
+    if ("sel" in tab) tab.sel = null;
+    if ("selTeam" in tab) tab.selTeam = null;
+    if ("creating" in tab) tab.creating = false;
+  });
+  armedTeam = null;
   loadUnderlay();
   // Repaint whatever tab is open. Global tabs are reloaded too — cheap, and
   // it keeps the two surfaces from disagreeing after a place edit.
@@ -1641,7 +1657,7 @@ async function refresh() {
 const Players = {
   data: null, sel: null, selTeam: null, creating: false,
   async load() {
-    try { this.data = await api("/api/dash/players"); }
+    try { this.data = await api(islq("/api/dash/players")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
@@ -1662,7 +1678,12 @@ const Players = {
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === p.id ? " sel" : "");
       row.style.paddingLeft = "18px";
-      row.innerHTML = `<span class="nm">${esc(p.name)}</span>
+      // A player with no GPS position is on no island, so they show on every
+      // island's roster rather than being hidden on all but one. Say so, or
+      // seeing the same name under both switches reads like a bug.
+      row.innerHTML = `<span class="nm">${esc(p.name)}${p.island
+          ? "" : ' <span class="nowhere" title="No GPS position — on no island'
+                 + ', so listed under both">nowhere</span>'}</span>
         <span class="sub" title="$${fmt(p.wallet)}">$${fmtC(p.wallet)}${p.inventory.length
           ? " · " + p.inventory.length + " it." : ""}</span>`;
       row.onclick = () => { this.sel = p.id; this.selTeam = null;
@@ -2061,7 +2082,7 @@ $("#pnew").onclick = () => { Players.creating = true; Players.renderEditor(); };
 const Npcs = {
   data: null, sel: null, creating: false,
   async load() {
-    try { this.data = await api("/api/dash/npcs"); }
+    try { this.data = await api(islq("/api/dash/npcs")); }
     catch (e) { return; }
     this.renderList();
     this.renderEditor();
