@@ -2450,19 +2450,20 @@ const Npcs = {
         const row = document.createElement("div");
         row.className = "lrow npcrow" + (this.sel === n.key ? " sel" : "");
         const title = (n.titles || [])[0] || "";
-        // Every forged row says "Reprise", which tells the dev nothing; who
-        // forged them does. In the Forged view the group header already
-        // carries the owner, so there it stays the affiliation.
-        const tag = this.forged(n) && this.owner(n) && this.mode !== "forged"
-          ? `forged by ${this.owner(n)}` : n.affiliation;
-        // The separator belongs to the pair, not to the tag — an NPC with no
-        // title must not render a leading "· ".
-        const aff = tag
-          ? `<span class="aff">${title ? "· " : ""}${esc(tag)}</span>` : "";
+        // The affiliation stays on the row even for a forged companion: they
+        // have an owner, but their loyalty is to the faction regardless. The
+        // owner rides in the forged badge instead, so neither displaces the
+        // other and the second line cannot truncate the owner away.
+        // The separator belongs to the pair — an NPC with no title must not
+        // render a leading "· ".
+        const aff = n.affiliation
+          ? `<span class="aff">${title ? "· " : ""}${esc(n.affiliation)}</span>` : "";
         row.innerHTML = `<span class="nm">${esc(n.name)}
             ${title || aff ? `<span class="ttl">${esc(title)}${title && aff ? " " : ""}${aff}</span>` : ""}</span>
           <span class="sub">
-            ${this.forged(n) ? '<span class="badge forge">forged</span>' : ""}
+            ${this.forged(n) ? `<span class="badge forge" title="Forged by ${
+              esc(this.owner(n) || "an unrecorded player")}">${
+              esc(this.owner(n) || "forged")}</span>` : ""}
             ${n.dead ? '<span class="badge dead">dead</span>' : ""}
             <span class="badge ${n.auto ? "on" : "off"}">${n.auto ? "auto" : "manual"}</span>
           </span>`;
