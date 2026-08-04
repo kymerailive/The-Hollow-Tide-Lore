@@ -101,13 +101,18 @@
   .apvbtns .btn { flex: 1 1 auto; min-height: 44px; min-width: 108px;
                   font-size: 14px; }
   .apvempty { max-width: 560px; }
-  #toast { position: fixed; left: 50%; bottom: 22px; z-index: 200;
-           transform: translate(-50%, 22px); opacity: 0; pointer-events: none;
-           max-width: min(92vw, 620px); padding: 11px 17px; border-radius: 11px;
-           background: #10131c; border: 1px solid var(--line2);
-           color: var(--text); font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
-           transition: opacity .18s, transform .18s; }
+  /* The only #toast rule. There were two, and the later one won every
+     property they shared, so these are its values — `max-width` is the one
+     line that came from the earlier block and survived. */
+  #toast { position: fixed; left: 50%; bottom: 20px; z-index: 99;
+           transform: translateX(-50%); opacity: 0; pointer-events: none;
+           max-width: min(92vw, 620px); padding: 9px 18px; border-radius: 11px;
+           background: #241d4a; border: 1px solid var(--accent);
+           color: var(--text); font-size: 13.5px;
+           box-shadow: 0 6px 24px rgba(0,0,0,.45);
+           transition: opacity .25s; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.err { background: var(--danger-bg); border-color: var(--danger); }
   @media (max-width: 560px) {
     .apvbtns .btn { flex: 1 1 100%; }
     .apvneed { flex: 1 1 100%; }
@@ -580,13 +585,6 @@
   .benchchips { max-height: 132px; overflow-y: auto; }
 
   /* ---------- toast & gate ---------- */
-  #toast { position: fixed; bottom: 20px; left: 50%;
-           transform: translateX(-50%); background: #241d4a;
-           border: 1px solid var(--accent); color: var(--text);
-           padding: 9px 18px; border-radius: 11px; opacity: 0;
-           transition: opacity .25s; pointer-events: none; z-index: 99;
-           box-shadow: 0 6px 24px rgba(0,0,0,.45); font-size: 13.5px; }
-  #toast.err { background: var(--danger-bg); border-color: var(--danger); }
   #tokengate { position: fixed; inset: 0; background: rgba(6,8,14,.94);
                display: flex; align-items: center; justify-content: center;
                z-index: 100; }
@@ -1009,13 +1007,6 @@ wrap.addEventListener("dblclick", e => {
   applyView();
 });
 
-function toast(msg, err) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.className = err ? "err" : "";
-  t.style.opacity = 1;
-  setTimeout(() => t.style.opacity = 0, 2600);
-}
 async function sha256hex(s) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("");
@@ -1243,10 +1234,8 @@ document.addEventListener("click", ev => {
                (Approvals.vals[f.dataset.q + ":" + f.dataset.k] = {});
   slot[f.dataset.need] = f.value;
 }));
-// This declaration shadows the earlier toast() — function declarations hoist,
-// so the last one wins for the whole script. The earlier one took an `err`
-// flag; without it here every toast(msg, true) in the file rendered as a
-// success. TODO: delete the dead first copy (and the dead #toast CSS block).
+// The one toast(). `err` styles it as a failure — passing it is the only way a
+// caller can make an error read as one, so keep the parameter.
 function toast(msg, err) {
   let t = $("#toast");
   if (!t) {
@@ -2302,18 +2291,11 @@ const Npcs = {
     this.renderEditor();
   },
   /* A player-forged companion, as opposed to a character the world already
-     had. The payload answers this outright as of 37fd61c — `forged` is the
-     record's forge block, and `owner` is the player who forged them.
-
-     The affiliation test below is ONLY for a bot that has not been restarted
-     since that commit and so still serves the older payload. It is a stopgap,
-     not a definition, and it is wrong on three of the current roster: kauʻi is
-     forged with no affiliation at all, and kūlia and laniʻōpua are Reprise
-     without a forge block. Restart the bot and this branch stops running. */
-  forged(n) {
-    if ("forged" in n) return !!n.forged;
-    return n.affiliation === "Reprise";
-  },
+     had. `forged` is the record's forge block and `owner` is the player who
+     forged them; the payload has carried both since 37fd61c. Never infer this
+     from affiliation — kauʻi is forged with no affiliation at all, and kūlia
+     and laniʻōpua are Reprise without a forge block. */
+  forged(n) { return !!n.forged; },
   owner(n) { return n.owner || null; },
   hasPortrait(n) { return !!(n.local_image || n.gif); },
   hasCombat(n) {
@@ -2328,11 +2310,7 @@ const Npcs = {
      TODO: shipping branches_taught_by(key) instead of the raw field would
      fold the merchant case in and let this list go. */
   teaches(n) {
-    if (MERCHANT_TEACHERS.includes(n.key)) return true;
-    if ("teaches" in n) return (n.teaches || []).length > 0;
-    // Pre-37fd61c payload: read the convention the authored teachers follow.
-    const p = n.profile || "";
-    return /^#{1,4}\s*teaching\b/im.test(p) || /teaching branch/i.test(p);
+    return MERCHANT_TEACHERS.includes(n.key) || (n.teaches || []).length > 0;
   },
   affOf(n) { return n.affiliation || "Unaffiliated"; },
   /* What the list groups on. Affiliation everywhere EXCEPT the Forged view,
