@@ -272,6 +272,55 @@
             vertical-align: top; }
 
   /* ---------- list + editor ---------- */
+  /* ---------- skill tree ----------
+     Drawn the way a game draws one: a column per tree, branches stacked down
+     it on a spine, and each branch's tiers as pips you click to set. The
+     spine is a pseudo-element rather than real elements so a tree with two
+     branches and a tree with four still line up. */
+  .trees { display: flex; gap: 14px; align-items: flex-start;
+           overflow-x: auto; padding-bottom: 6px; width: 100%; }
+  .tree { flex: 1 1 210px; min-width: 210px; position: relative;
+          padding: 0 0 6px; }
+  .tree > h3 { font-size: 13px; letter-spacing: .3px; margin: 0 0 3px;
+               display: flex; align-items: center; gap: 7px; }
+  .tree > .hint { margin-bottom: 12px; min-height: 32px; }
+  .tree .spine { position: relative; display: flex; flex-direction: column;
+                 gap: 10px; padding-left: 16px; }
+  .tree .spine::before { content: ""; position: absolute; left: 5px;
+                         top: 14px; bottom: 14px; width: 2px;
+                         background: linear-gradient(180deg, var(--accent),
+                                     rgba(77,195,255,.25)); border-radius: 2px; }
+  .node { position: relative; background: var(--panel2);
+          border: 1px solid var(--line); border-radius: 11px;
+          padding: 9px 11px; transition: border-color .13s, background .13s; }
+  .node::before { content: ""; position: absolute; left: -11px; top: 16px;
+                  width: 11px; height: 2px; background: var(--line2); }
+  .node.has { border-color: var(--accent); background: #1a1b3a; }
+  .node.locked { opacity: .62; }
+  .node h4 { font-size: 12.5px; margin: 0; display: flex; gap: 6px;
+             align-items: center; flex-wrap: wrap; }
+  .node .nblurb { color: var(--faint); font-size: 11px; line-height: 1.45;
+                  margin-top: 3px; }
+  .node .meta { color: var(--faint); font-size: 10.5px; margin-top: 5px; }
+  .pips { display: flex; gap: 5px; margin-top: 7px; }
+  .pip { width: 26px; height: 15px; border-radius: 5px; cursor: pointer;
+         border: 1px solid var(--line2); background: #0d1020;
+         transition: background .12s, border-color .12s, transform .1s; }
+  .pip:hover { border-color: var(--accent2); transform: translateY(-1px); }
+  .pip.on { background: var(--grad); border-color: transparent; }
+  .pip.cool { background: repeating-linear-gradient(45deg, #2a2140 0 4px,
+              #3a2f58 4px 8px); }
+  .tiernote { font-size: 11px; color: var(--dim); margin-top: 6px;
+              line-height: 1.45; border-top: 1px dashed var(--line);
+              padding-top: 6px; }
+  .tiernote b { color: var(--text); font-weight: 600; }
+  .prow { display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+          border-radius: 9px; cursor: pointer; }
+  .prow:hover { background: rgba(255,255,255,.045); }
+  .prow.sel { background: var(--grad); color: #fff; }
+  .prow .sub { color: var(--dim); font-size: 11.5px; margin-left: auto; }
+  .prow.sel .sub { color: rgba(255,255,255,.8); }
+
   .listpane { width: 340px; flex-shrink: 0; max-height: calc(100vh - 118px);
               overflow-y: auto; }
   .editor { flex: 1; min-width: 0; max-height: calc(100vh - 118px);
@@ -328,11 +377,54 @@
   .badge.on { color: #8fdba2; background: rgba(92,224,138,.12); }
   .badge.off { color: #e2b98c; background: rgba(240,179,76,.10); }
   .badge.dead { color: var(--danger); background: var(--danger-bg); }
+  .badge.forge { color: #c9a6ff; background: rgba(124,92,255,.15); }
+
+  /* ---------- NPC roster filters ----------
+     The roster is 119 rows deep and half of it is other people's forged
+     companions, so the list needs a filter bar above it rather than a
+     scroll. Segmented control for the World/Forged split, toggle chips for
+     everything else. */
+  .seg { display: inline-flex; border: 1px solid var(--line2);
+         border-radius: 9px; overflow: hidden; margin-bottom: 8px; }
+  .seg button { border: 0; background: var(--panel2); color: var(--dim);
+                font: inherit; font-size: 12px; font-weight: 600;
+                padding: 5px 13px; cursor: pointer; transition: all .12s; }
+  .seg button + button { border-left: 1px solid var(--line2); }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: var(--grad); color: var(--accent-ink); }
+  .fchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .fchip { font-size: 11px; padding: 2.5px 9px; border-radius: 12px;
+           border: 1px solid var(--line2); background: var(--panel2);
+           color: var(--dim); cursor: pointer; user-select: none;
+           transition: all .12s; }
+  .fchip:hover { color: var(--text); border-color: var(--faint); }
+  .fchip.on { background: rgba(124,92,255,.18); border-color: var(--accent);
+              color: var(--text); }
+  /* One row, because the pane is 340px wide and 520px tall on a laptop —
+     every row this bar takes is a row of roster the dev cannot see. */
+  .fbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .fbar .seg { margin-bottom: 0; flex-shrink: 0; }
+  .fbar select { flex: 1; min-width: 0; font-size: 12px; padding: 5px 8px; }
+  .grphdr { position: sticky; top: -14px; z-index: 2; background: var(--panel);
+            margin: 10px -4px 3px; padding: 6px 9px 4px; font-size: 10.5px;
+            text-transform: uppercase; letter-spacing: .9px; color: var(--faint);
+            font-weight: 700; border-bottom: 1px solid var(--line);
+            cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .grphdr:hover { color: var(--text); }
+  .grphdr .caret { font-size: 9px; width: 9px; }
+  .grphdr .n { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .lrow.npcrow { align-items: flex-start; }
+  .lrow.npcrow .nm { white-space: normal; }
+  .lrow .ttl { display: block; color: var(--dim); font-size: 11px;
+               line-height: 1.35; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; }
+  .lrow .ttl .aff { color: var(--faint); }
   .btn { padding: 7px 15px; border-radius: 9px; border: 1px solid var(--line2);
          cursor: pointer; background: var(--panel2); color: var(--text);
          font: inherit; font-weight: 500; transition: all .12s; }
   .btn:hover { border-color: var(--faint); filter: brightness(1.12); }
   .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: progress; filter: none; }
   .btn.primary { background: var(--grad); border-color: transparent;
                  color: var(--accent-ink); font-weight: 700;
                  box-shadow: 0 4px 14px rgba(124,92,255,.3); }
@@ -539,6 +631,7 @@
     <span class="tab" data-view="players"><span class="ic">👥</span><span class="lb">Players</span></span>
     <span class="tab" data-view="npcs"><span class="ic">🎭</span><span class="lb">NPCs</span></span>
     <span class="tab" data-view="items"><span class="ic">🎒</span><span class="lb">Items</span></span>
+    <span class="tab" data-view="skills"><span class="ic">🌳</span><span class="lb">Skill tree</span></span>
     <span class="tab" data-view="quests"><span class="ic">📜</span><span class="lb">Questlines</span></span>
     <span class="tab" data-view="lines"><span class="ic">📡</span><span class="lb">Lines</span></span>
     <span class="tab" data-view="events"><span class="ic">🌩</span><span class="lb">Events</span></span>
@@ -620,11 +713,33 @@
 
 <section class="view" id="view-npcs">
   <div class="listpane card">
-    <input class="search" id="nsearch" type="text" placeholder="Search NPCs…">
+    <input class="search" id="nsearch" type="text"
+           placeholder="Search name, title, affiliation, task, profile…">
+    <div class="fbar">
+      <div class="seg" id="nmode">
+        <button data-mode="world" class="on">World</button>
+        <button data-mode="forged">Forged</button>
+        <button data-mode="all">All</button>
+      </div>
+      <select id="naff" title="Affiliation"><option value="">Any affiliation</option></select>
+      <!-- Only shown when the payload actually spans more than one island;
+           /api/dash/npcs is island-scoped, so usually it does not. -->
+      <select id="nisland" title="Island" style="display:none"><option value="">Any island</option></select>
+    </div>
+    <div class="fchips" id="nchips">
+      <span class="fchip" data-f="noportrait" title="Neither a local file nor a gif URL">no portrait</span>
+      <span class="fchip" data-f="nocombat" title="No tier, HP, threat or kill notes">no combat</span>
+      <span class="fchip" data-f="auto">auto</span>
+      <span class="fchip" data-f="manual">manual</span>
+      <span class="fchip" data-f="note" title="Has a scene note steering their replies">scene note</span>
+      <span class="fchip" data-f="teaches"
+            title="Carries a teaches branch, or is one of the four Merchant teachers the engine hardcodes">teaches</span>
+    </div>
     <button class="btn mini" id="nnew">＋ New NPC</button>
-    <button class="btn mini" id="nallon" title="Auto-reply ON for every NPC">⚡ all auto</button>
-    <button class="btn mini" id="nalloff" title="Auto-reply OFF for every NPC">✋ all manual</button>
-    <div id="nlist" style="margin-top:8px"></div>
+    <button class="btn mini" id="nallon" title="Auto-reply ON for the NPCs shown">⚡ all auto</button>
+    <button class="btn mini" id="nalloff" title="Auto-reply OFF for the NPCs shown">✋ all manual</button>
+    <p class="hint" id="ncount" style="margin:8px 0 0"></p>
+    <div id="nlist" style="margin-top:4px"></div>
   </div>
   <div class="editor card" id="nedit"><p class="muted">Select an NPC.</p></div>
 </section>
@@ -682,6 +797,19 @@
     unlisting returns the goods to the seller's bag.</p>
   </div>
   <div class="editor card" id="shedit"><p class="muted">Loading…</p></div>
+</section>
+
+<section class="view" id="view-skills">
+  <div class="listpane card">
+    <input class="search" id="ksearch" type="text" placeholder="Search players…">
+    <div id="klist"></div>
+    <p class="hint" style="margin-top:8px">Pick a player to read the tree
+    against them; click a tier pip to grant or clear it (clicking the tier
+    they already hold clears back to the one below). Everything here is
+    audited. Players don't see this — they meet a branch by being taught it
+    on the line.</p>
+  </div>
+  <div class="editor card" id="kedit"><p class="muted">Loading…</p></div>
 </section>
 
 <section class="view" id="view-sites">
@@ -1115,12 +1243,17 @@ document.addEventListener("click", ev => {
                (Approvals.vals[f.dataset.q + ":" + f.dataset.k] = {});
   slot[f.dataset.need] = f.value;
 }));
-function toast(msg) {
+// This declaration shadows the earlier toast() — function declarations hoist,
+// so the last one wins for the whole script. The earlier one took an `err`
+// flag; without it here every toast(msg, true) in the file rendered as a
+// success. TODO: delete the dead first copy (and the dead #toast CSS block).
+function toast(msg, err) {
   let t = $("#toast");
   if (!t) {
     t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t);
   }
   t.textContent = msg; t.classList.add("show");
+  t.classList.toggle("err", !!err);
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove("show"), 3200);
 }
@@ -1193,6 +1326,9 @@ function setIsland(k) {
     if ("sel" in tab) tab.sel = null;
     if ("selTeam" in tab) tab.selTeam = null;
     if ("creating" in tab) tab.creating = false;
+    // Same reasoning for list filters: one island's affiliations are not the
+    // other's, so a held-over filter would survive as invisible state.
+    if (typeof tab.resetFilters === "function") tab.resetFilters();
   });
   armedTeam = null;
   loadUnderlay();
@@ -1238,6 +1374,7 @@ function switchView(v) {
     players: ["Players", ""], npcs: ["NPCs", ""], items: ["Items", ""],
     quests: ["Questlines", ""], lines: ["Lines", "live state"],
     events: ["Road events", ""], shops: ["Shops", ""],
+    skills: ["Skill tree", "five trees, fourteen branches"],
     sites: ["Team sites", ""], regions: ["Regions", ""],
     locations: ["Locations", ""],
     bases: ["Bases", "live interior maps"],
@@ -1256,6 +1393,7 @@ function switchView(v) {
   if (v === "lines") Lines.load();
   if (v === "events") Events.load();
   if (v === "shops") Shops.load();
+  if (v === "skills") Skills.load();
   if (v === "sites") Sites.load();
   if (v === "regions") Regions.load();
   if (v === "locations") Locations.load();
@@ -2146,31 +2284,196 @@ $("#psearch").oninput = () => Players.renderList();
 $("#pnew").onclick = () => { Players.creating = true; Players.renderEditor(); };
 
 /* ================= NPCS ================= */
+// Mirrors MERCHANT_TEACHERS in lnk_mini.py — the four who teach the Merchant
+// trade by being on that list rather than by carrying a `teaches` field.
+const MERCHANT_TEACHERS = ["koa", "noe", "piko", "kawelo"];
 const Npcs = {
   data: null, sel: null, creating: false,
+  mode: "world",          // world | forged | all
+  filters: new Set(),     // the chips above the list
+  island: "", aff: "",
+  collapsed: new Set(),   // affiliation groups folded shut
+  shown: [],              // what the last renderList() actually drew
   async load() {
     try { this.data = await api(islq("/api/dash/npcs")); }
     catch (e) { return; }
+    this.fillSelects();
     this.renderList();
     this.renderEditor();
+  },
+  /* A player-forged companion, as opposed to a character the world already
+     had. The payload answers this outright as of 37fd61c — `forged` is the
+     record's forge block, and `owner` is the player who forged them.
+
+     The affiliation test below is ONLY for a bot that has not been restarted
+     since that commit and so still serves the older payload. It is a stopgap,
+     not a definition, and it is wrong on three of the current roster: kauʻi is
+     forged with no affiliation at all, and kūlia and laniʻōpua are Reprise
+     without a forge block. Restart the bot and this branch stops running. */
+  forged(n) {
+    if ("forged" in n) return !!n.forged;
+    return n.affiliation === "Reprise";
+  },
+  owner(n) { return n.owner || null; },
+  hasPortrait(n) { return !!(n.local_image || n.gif); },
+  hasCombat(n) {
+    const c = n.combat || {};
+    return !!(c.tier || c.hp != null || c.threat || c.kill_notes);
+  },
+  /* Two sources, because the engine has two. The payload now ships the
+     record's `teaches` list, but that is only half the answer: the Merchant
+     trade is taught by the hardcoded MERCHANT_TEACHERS tuple in lnk_mini.py,
+     and none of those four carry the field. Mirror both or the chip hides
+     four of the six teachers on the roster.
+     TODO: shipping branches_taught_by(key) instead of the raw field would
+     fold the merchant case in and let this list go. */
+  teaches(n) {
+    if (MERCHANT_TEACHERS.includes(n.key)) return true;
+    if ("teaches" in n) return (n.teaches || []).length > 0;
+    // Pre-37fd61c payload: read the convention the authored teachers follow.
+    const p = n.profile || "";
+    return /^#{1,4}\s*teaching\b/im.test(p) || /teaching branch/i.test(p);
+  },
+  affOf(n) { return n.affiliation || "Unaffiliated"; },
+  /* What the list groups on. Affiliation everywhere EXCEPT the Forged view,
+     where every row would land in one 45-deep "Reprise" bucket — the flat
+     scroll this tab exists to break up. There, the owner is the useful axis:
+     seven players forged these, not one. */
+  groupOf(n) {
+    if (this.mode === "forged")
+      return this.owner(n) ? `Forged by ${this.owner(n)}` : "Forged";
+    return this.affOf(n);
+  },
+  inMode(n) {
+    return this.mode === "all" || this.forged(n) === (this.mode === "forged");
+  },
+  /* Rebuilt on every load AND on every mode switch, because the affiliation
+     options depend on the mode: with forged() falling back to affiliation,
+     World + "Reprise" is an empty set the dev cannot see the cause of.
+     Both selects reconcile their retained value against the new options —
+     assigning a value no <option> carries silently deselects the control
+     while match() keeps filtering on it, which reads as a dead roster. */
+  fillSelects() {
+    const isl = $("#nisland"), aff = $("#naff");
+    const islands = this.data.islands || {};
+    const label = k => k === "*" ? "Every island" : (islands[k] || k);
+    const seenIsl = [...new Set(this.data.npcs.map(n => n.island).filter(Boolean))].sort();
+    if (this.island && !seenIsl.includes(this.island)) this.island = "";
+    isl.innerHTML = '<option value="">Any island</option>' + seenIsl.map(k =>
+      `<option value="${esc(k)}">${esc(label(k))}</option>`).join("");
+    isl.value = this.island;
+    // One island in scope means the control can only ever be a no-op.
+    isl.style.display = seenIsl.length > 1 ? "" : "none";
+
+    const affs = [...new Set(this.data.npcs.filter(n => this.inMode(n))
+                                 .map(n => this.affOf(n)))]
+      .sort((a, b) => a.localeCompare(b));
+    if (this.aff && !affs.includes(this.aff)) this.aff = "";
+    aff.innerHTML = '<option value="">Any affiliation</option>' + affs.map(a =>
+      `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    aff.value = this.aff;
+  },
+  /* An island switch reloads every tab scoped to the new island; filters held
+     over from the old one would survive as invisible state. */
+  resetFilters() {
+    this.mode = "world"; this.filters.clear();
+    this.island = ""; this.aff = ""; this.collapsed.clear();
+    const s = $("#nsearch"); if (s) s.value = "";
+    $("#nmode").querySelectorAll("button").forEach(b =>
+      b.classList.toggle("on", b.dataset.mode === "world"));
+    $("#nchips").querySelectorAll(".fchip").forEach(c => c.classList.remove("on"));
+  },
+  /* Names what is on, so an empty roster explains itself. */
+  activeFilters() {
+    const on = [];
+    if (this.mode !== "all") on.push(this.mode === "forged" ? "Forged" : "World");
+    if (this.aff) on.push(this.aff);
+    if (this.island) on.push($("#nisland").selectedOptions[0].textContent);
+    this.filters.forEach(f => on.push(f));
+    if ($("#nsearch").value.trim()) on.push(`“${$("#nsearch").value.trim()}”`);
+    return on;
+  },
+  match(n, q) {
+    if (!this.inMode(n)) return false;
+    if (this.island && n.island !== this.island) return false;
+    if (this.aff && this.affOf(n) !== this.aff) return false;
+    const f = this.filters;
+    if (f.has("noportrait") && this.hasPortrait(n)) return false;
+    if (f.has("nocombat") && this.hasCombat(n)) return false;
+    if (f.has("auto") && !n.auto) return false;
+    if (f.has("manual") && n.auto) return false;
+    if (f.has("note") && !(n.notes || "").trim()) return false;
+    if (f.has("teaches") && !this.teaches(n)) return false;
+    if (!q) return true;
+    return [n.name, n.key, n.affiliation, n.task, n.profile,
+            ...(n.titles || [])]
+      .some(s => (s || "").toLowerCase().includes(q));
   },
   renderList() {
     const q = $("#nsearch").value.trim().toLowerCase();
     const box = $("#nlist");
     box.innerHTML = "";
-    for (const n of this.data.npcs) {
-      if (q && !n.name.toLowerCase().includes(q) && !n.key.includes(q)) continue;
-      const row = document.createElement("div");
-      row.className = "lrow" + (this.sel === n.key ? " sel" : "");
-      row.innerHTML = `<span class="nm">${esc(n.name)}</span>
-        <span class="sub">
-          ${n.dead ? '<span class="badge dead">dead</span>' : ""}
-          <span class="badge ${n.auto ? "on" : "off"}">${n.auto ? "auto" : "manual"}</span>
-        </span>`;
-      row.onclick = () => { this.sel = n.key; this.creating = false;
-                            this.renderList(); this.renderEditor(); };
-      box.appendChild(row);
+    this.shown = this.data.npcs.filter(n => this.match(n, q));
+
+    const total = this.data.npcs.length;
+    $("#ncount").textContent = this.shown.length === total
+      ? `${total} NPCs · ⚡/✋ hit all of them`
+      : `${this.shown.length} of ${total} · ⚡/✋ hit only these`;
+
+    const groups = new Map();
+    for (const n of this.shown) {
+      const a = this.groupOf(n);
+      if (!groups.has(a)) groups.set(a, []);
+      groups.get(a).push(n);
     }
+    for (const a of [...groups.keys()].sort((x, y) => x.localeCompare(y))) {
+      const rows = groups.get(a), shut = this.collapsed.has(a);
+      const hdr = document.createElement("div");
+      hdr.className = "grphdr";
+      hdr.dataset.aff = a;
+      hdr.innerHTML = `<span class="caret">${shut ? "▶" : "▼"}</span>
+        <span>${esc(a)}</span><span class="n">${rows.length}</span>`;
+      hdr.onclick = () => {
+        // Keep the clicked header under the pointer: collapsing a big group
+        // shortens the list and the browser clamps scrollTop out from under it.
+        const pane = box.closest(".listpane");
+        const before = hdr.getBoundingClientRect().top;
+        if (shut) this.collapsed.delete(a); else this.collapsed.add(a);
+        this.renderList();
+        const now = [...box.querySelectorAll(".grphdr")]
+          .find(h => h.dataset.aff === a);
+        if (pane && now) pane.scrollTop += now.getBoundingClientRect().top - before;
+      };
+      box.appendChild(hdr);
+      if (shut) continue;
+      for (const n of rows) {
+        const row = document.createElement("div");
+        row.className = "lrow npcrow" + (this.sel === n.key ? " sel" : "");
+        const title = (n.titles || [])[0] || "";
+        // Every forged row says "Reprise", which tells the dev nothing; who
+        // forged them does. In the Forged view the group header already
+        // carries the owner, so there it stays the affiliation.
+        const tag = this.forged(n) && this.owner(n) && this.mode !== "forged"
+          ? `forged by ${this.owner(n)}` : n.affiliation;
+        // The separator belongs to the pair, not to the tag — an NPC with no
+        // title must not render a leading "· ".
+        const aff = tag
+          ? `<span class="aff">${title ? "· " : ""}${esc(tag)}</span>` : "";
+        row.innerHTML = `<span class="nm">${esc(n.name)}
+            ${title || aff ? `<span class="ttl">${esc(title)}${title && aff ? " " : ""}${aff}</span>` : ""}</span>
+          <span class="sub">
+            ${this.forged(n) ? '<span class="badge forge">forged</span>' : ""}
+            ${n.dead ? '<span class="badge dead">dead</span>' : ""}
+            <span class="badge ${n.auto ? "on" : "off"}">${n.auto ? "auto" : "manual"}</span>
+          </span>`;
+        row.onclick = () => { this.sel = n.key; this.creating = false;
+                              this.renderList(); this.renderEditor(); };
+        box.appendChild(row);
+      }
+    }
+    if (!this.shown.length)
+      box.innerHTML = `<p class="muted">No NPC matches
+        ${esc(this.activeFilters().join(" + ") || "these filters")}.</p>`;
   },
   npc() { return this.data.npcs.find(n => n.key === this.sel); },
   renderEditor() {
@@ -2308,11 +2611,72 @@ const Npcs = {
 };
 $("#nsearch").oninput = () => Npcs.renderList();
 $("#nnew").onclick = () => { Npcs.creating = true; Npcs.renderEditor(); };
-const npcBulk = val => {
-  if (!confirm(`Turn auto-reply ${val ? "ON" : "OFF"} for EVERY NPC?`)) return;
-  api("/api/dash/npc-bulk", { auto: val })
-    .then(r => { toast(`${r.changed} NPC(s) changed`); Npcs.load(); })
-    .catch(e => toast(e.message, true));
+$("#nmode").querySelectorAll("button").forEach(b => {
+  b.onclick = () => {
+    Npcs.mode = b.dataset.mode;
+    $("#nmode").querySelectorAll("button")
+      .forEach(o => o.classList.toggle("on", o === b));
+    Npcs.fillSelects();      // the affiliation options belong to the mode
+    Npcs.renderList();
+  };
+});
+$("#nchips").querySelectorAll(".fchip").forEach(c => {
+  c.onclick = () => {
+    const f = c.dataset.f;
+    // auto and manual are opposites; turning one on clears the other.
+    if (f === "auto") Npcs.filters.delete("manual");
+    if (f === "manual") Npcs.filters.delete("auto");
+    if (Npcs.filters.has(f)) Npcs.filters.delete(f); else Npcs.filters.add(f);
+    $("#nchips").querySelectorAll(".fchip").forEach(o =>
+      o.classList.toggle("on", Npcs.filters.has(o.dataset.f)));
+    Npcs.renderList();
+  };
+});
+$("#nisland").onchange = e => { Npcs.island = e.target.value; Npcs.renderList(); };
+$("#naff").onchange = e => { Npcs.aff = e.target.value; Npcs.renderList(); };
+
+/* Scoped to what the filters are showing, not the whole table.
+   /api/dash/npc-bulk takes no key list, and it flips every NPC in the save —
+   including the other island's, which the island-scoped roster never showed —
+   so a scoped flip has to be one save per NPC. That is not free: each save
+   writes the file and awaits its own audit send, so the run is slow and the
+   dev log gets a line per NPC. The confirm says so rather than hiding it.
+   TODO (NPC_BULK_KEYS_ASK.md): an optional `keys` list on dash_npc_bulk makes
+   this one request, one save and one audit line again. */
+let npcBulkBusy = false;
+const npcBulk = async val => {
+  if (npcBulkBusy) { toast("A bulk flip is already running", true); return; }
+  const targets = Npcs.shown.filter(n => !!n.auto !== val);
+  if (!targets.length) {
+    toast(`Every NPC shown is already ${val ? "auto" : "manual"}`);
+    return;
+  }
+  const scope = Npcs.shown.length === Npcs.data.npcs.length
+    ? `all ${Npcs.shown.length}` : `the ${Npcs.shown.length} shown`;
+  if (!confirm(`Turn auto-reply ${val ? "ON" : "OFF"} for ${scope} NPC(s)?\n\n` +
+               `${targets.length} will change — one save and one audit line ` +
+               `each, so allow roughly ${Math.ceil(targets.length * 0.6)}s.`))
+    return;
+  npcBulkBusy = true;
+  const btns = [$("#nallon"), $("#nalloff")];
+  btns.forEach(b => b.disabled = true);
+  let done = 0, failed = null;
+  try {
+    for (const n of targets) {
+      try { await api("/api/dash/npc", { key: n.key, auto: val }); done++; }
+      catch (e) { failed = { n, e }; break; }
+    }
+  } finally {
+    npcBulkBusy = false;
+    btns.forEach(b => b.disabled = false);
+  }
+  // A failure has to survive the report: a plain count toast after an aborted
+  // run reads as success, and the rest of the targets kept their old value.
+  toast(failed
+    ? `Stopped at ${failed.n.name}: ${failed.e.message} — ` +
+      `${done} of ${targets.length} changed, ${targets.length - done} untouched`
+    : `${done} NPC(s) changed`, !!failed);
+  Npcs.load();
 };
 $("#nallon").onclick = () => npcBulk(true);
 $("#nalloff").onclick = () => npcBulk(false);
@@ -3048,6 +3412,102 @@ const Shops = {
 };
 
 /* ================= TEAM SITES (passcodes) ================= */
+/* ================= SKILL TREE =================
+   Dev-only while the tree is being fleshed out. Five trees, fourteen branches;
+   every label, tier name, gate and unlock comes from SKILL_DEFS on the bot, so
+   this page cannot describe a tier the bot won't actually grant. Clicking a
+   pip is the same write /skill grant does, and is audited the same way. */
+const Skills = {
+  data: null, sel: null, q: "",
+  async load() {
+    try { this.data = await api("/api/dash/skills"); }
+    catch (e) { $("#kedit").innerHTML =
+      '<p class="muted">Can\'t reach the bot API.</p>'; return; }
+    if (this.sel && !this.data.players.some(p => p.id === this.sel))
+      this.sel = null;
+    this.renderList(); this.render();
+  },
+  player() {
+    return this.data.players.find(p => p.id === this.sel) || null;
+  },
+  renderList() {
+    const q = this.q.toLowerCase();
+    $("#klist").innerHTML = this.data.players
+      .filter(p => !q || p.name.toLowerCase().includes(q))
+      .map(p => {
+        const n = Object.values(p.skills || {}).length;
+        return `<div class="prow ${p.id === this.sel ? "sel" : ""}"
+                     data-kp="${p.id}">
+          <span>${esc(p.name)}</span>
+          <span class="sub">${n ? n + " branch" + (n === 1 ? "" : "es") : "—"}</span>
+        </div>`;
+      }).join("") || '<p class="muted">No players.</p>';
+    $("#klist").querySelectorAll("[data-kp]").forEach(r =>
+      r.onclick = () => { this.sel = r.dataset.kp; this.renderList(); this.render(); });
+  },
+  render() {
+    const p = this.player();
+    const box = $("#kedit");
+    const head = p
+      ? `<h2 style="margin-top:0">${esc(p.name)}${p.team_name
+           ? ' <span class="hint">— ' + esc(p.team_name) + "</span>" : ""}</h2>`
+      : '<h2 style="margin-top:0">The tree</h2><p class="hint">Pick a player '
+        + "on the left to read it against them and set tiers.</p>";
+    box.innerHTML = head + '<div class="trees">'
+      + this.data.trees.map(t => this.tree(t, p)).join("") + "</div>";
+    box.querySelectorAll("[data-pip]").forEach(b =>
+      b.onclick = () => this.setTier(b.dataset.branch, +b.dataset.pip));
+  },
+  tree(t, p) {
+    return `<div class="tree">
+      <h3>${t.emoji} ${esc(t.label)}</h3>
+      <p class="hint">${esc(t.blurb)}</p>
+      <div class="spine">${t.branches.map(b => this.node(b, p)).join("")}</div>
+    </div>`;
+  },
+  node(b, p) {
+    const lvl = p ? (p.skills[b.key] || 0) : 0;
+    const cool = p ? (p.cooldowns[b.key] || 0) : 0;
+    const pips = b.tiers.map(t => `
+      <button class="pip ${t.tier <= lvl ? "on" : ""} ${
+        t.tier <= lvl && cool ? "cool" : ""}"
+              ${p ? "" : "disabled"} data-pip="${t.tier}" data-branch="${b.key}"
+              title="${esc(t.name)} — ${esc(t.unlock || "")}${
+                t.gate ? " (" + t.gate + " friendship)" : ""}"></button>`).join("");
+    const held = lvl ? b.tiers.find(t => t.tier === lvl) : null;
+    return `<div class="node ${lvl ? "has" : ""} ${p && !lvl ? "locked" : ""}">
+      <h4>${b.emoji} ${esc(b.label)}${b.dev_only
+        ? ' <span class="hint">dev-set</span>' : ""}</h4>
+      <div class="nblurb">${esc(b.blurb)}</div>
+      <div class="pips">${pips}</div>
+      ${held ? `<div class="tiernote"><b>${esc(held.name)}</b> — ${
+        esc(held.unlock)}${cool ? ` <i>· ready in ${Math.ceil(cool / 60)} min</i>`
+        : ""}${b.cost ? `<br><i>Costs: ${esc(b.cost)}</i>` : ""}${
+        b.example ? `<br><span class="muted">They'd type ${esc(b.example)}</span>`
+        : ""}</div>` : ""}
+      <div class="meta">${b.limit ? esc(b.limit) + " · " : ""}${
+        b.teachers.length ? "taught by " + esc(b.teachers.slice(0, 3).join(", "))
+          + (b.teachers.length > 3 ? " +" + (b.teachers.length - 3) : "")
+        : (b.dev_only ? "no NPC teaches it" : "no teacher flagged")}</div>
+    </div>`;
+  },
+  setTier(branch, tier) {
+    const p = this.player();
+    if (!p) return;
+    // Clicking the tier they already hold steps back down — otherwise the top
+    // pip would be a dead end and clearing a branch would need another control.
+    const want = (p.skills[branch] || 0) === tier ? tier - 1 : tier;
+    api("/api/dash/skill", { player_id: p.id, branch, tier: want })
+      .then(() => { toast(`${p.name}: ${branch} → ${want}`); this.load(); })
+      .catch(e => toast(e.message, true));
+  },
+};
+document.addEventListener("input", ev => {
+  if (ev.target && ev.target.id === "ksearch") {
+    Skills.q = ev.target.value; if (Skills.data) Skills.renderList();
+  }
+});
+
 const Sites = {
   data: null, shown: {},
   author() { return localStorage.getItem("ht_author") || ""; },
