@@ -1692,6 +1692,21 @@ function startDrag(e, target, el, label) {
     const near = nearestPlace(canvasXY(ev), 55);
     drag = null;
     if (!near) { render(); return; }
+    /* A drop used to relocate a live player the instant the pointer came up.
+       The island-crossing confirm inside moveOnMap only fires on a CROSSING,
+       so a stray drag within one island moved somebody silently and ended any
+       trip they were on. Ask first — but only when the drop actually changes
+       where they are, so putting a pawn back where it came from is still free. */
+    const from = (target.player_id
+                  ? (state.players || []).find(p => p.id === target.player_id)
+                  : null);
+    const wasAt = from && from.place;
+    if (wasAt !== near) {
+      const whereFrom = (wasAt && state.places[wasAt] && state.places[wasAt].name)
+                        || (wasAt ? wasAt : "off the map");
+      if (!confirm(`Move ${label} from ${whereFrom} to `
+                   + `${state.places[near].name}?`)) { render(); return; }
+    }
     moveOnMap({ ...target, place: near },
               r => `${label} → ${state.places[near].name}` +
                    (r.moved > 1 ? ` (${r.moved} players)` : ""),
