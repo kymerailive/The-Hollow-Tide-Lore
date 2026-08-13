@@ -193,10 +193,21 @@
   .islcard .pill.off { color: var(--gold); border: 1px solid #6b5527;
               background: rgba(240,179,76,.12); }
   .unplaced { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-  .unplaced span { font-size: 11.5px; padding: 3px 9px; border-radius: 8px;
+  .unplaced span { display: inline-flex; align-items: center; min-height: 38px;
+              font-size: 12px; padding: 8px 12px; border-radius: 9px;
               border: 1px dashed var(--line2); color: var(--dim);
-              cursor: grab; background: var(--panel2); }
+              cursor: grab; background: var(--panel2);
+              touch-action: none; user-select: none; }
   .unplaced span:hover { color: var(--text); border-color: var(--accent2); }
+  .unplaced span.dragging { cursor: grabbing; opacity: .6; }
+  /* Armed by a tap: the next tap on the map places it. Solid, gold, and the
+     map says so too, because arming is a mode and a mode you cannot see is a
+     mode you will forget you are in. */
+  .unplaced span.armed { border-style: solid; border-color: var(--gold);
+              color: var(--gold); background: rgba(240,179,76,.12); }
+  #mapwrap.droparmed, body.arming #mapwrap {
+              outline: 2px dashed var(--gold); outline-offset: -3px; }
+  body.arming #mapwrap { cursor: crosshair; }
   body.arrange .place .dot { outline: 2px dashed var(--gold);
                              outline-offset: 2px; cursor: grab; }
   #status { color: var(--dim); font-size: 12px;
@@ -234,9 +245,18 @@
   #overlay { position: absolute; inset: 0; }
   .place { position: absolute;
            transform: translate(-50%, -50%) scale(var(--inv, 1)); }
+  /* The dot stays 13px on purpose — 41 of them on one island have to read as
+     pins, not as buttons. What grows is the invisible ring around it, to the
+     44px touch minimum, so the map looks identical and a thumb can hit it.
+     .place is already counter-scaled by --inv, so 44px here is 44 real pixels
+     at every zoom level; zooming in never made these easier to hit, which is
+     why the hit area had to be fixed separately from the zoom. */
   .place .dot { width: 13px; height: 13px; border-radius: 50%;
                 background: #8c1d1d; border: 2px solid #fff; cursor: pointer;
-                box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+                box-shadow: 0 1px 3px rgba(0,0,0,.4); position: relative; }
+  .place .dot::before { content: ""; position: absolute; left: 50%; top: 50%;
+                width: 44px; height: 44px; border-radius: 50%;
+                transform: translate(-50%, -50%); }
   .place.new .dot { background: #f4efdd; border-color: #5c3317; }
   .place .lbl { position: absolute; left: 50%; transform: translateX(-50%);
                 bottom: 16px; white-space: nowrap; font-size: 11px;
@@ -247,6 +267,11 @@
           border: 2px solid #fff;
           transform: translate(-50%, -50%) scale(var(--inv, 1));
           cursor: grab; z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+  /* Same trick as .place — a 44px grab ring that does not change the pawn. It
+     sits under the ::after ping ring, which keeps its own animation. */
+  .pawn::before { content: ""; position: absolute; left: 50%; top: 50%;
+          width: 44px; height: 44px; border-radius: 50%;
+          transform: translate(-50%, -50%); }
   .pawn.traveling { opacity: .55; border-style: dashed; }
   .pawn::after { content: ""; position: absolute; inset: -2px; border-radius: 50%;
                  border: 2px solid currentColor;
@@ -255,6 +280,46 @@
                     80%, 100% { transform: scale(2.1); opacity: 0; } }
   .pawn.dragging { cursor: grabbing; z-index: 50; }
   .pawn.dragging::after { animation: none; }
+  /* An NPC standing at a place, dotted around the pin so a garrison of six
+     does not stack into one marker. Counter-scaled like .place and .pawn, and
+     carrying the same invisible 44px ring, because on a phone this is how a
+     dev picks one out of a crowd. */
+  .npcdot { position: absolute; width: 15px; height: 15px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,.9); z-index: 4;
+            transform: translate(calc(-50% + var(--ox, 0px)),
+                                 calc(-50% + var(--oy, 0px)))
+                       scale(var(--inv, 1));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 7px; font-weight: 800; color: #fff; cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,.5); user-select: none; }
+  .npcdot::before { content: ""; position: absolute; left: 50%; top: 50%;
+            width: 44px; height: 44px; border-radius: 50%;
+            transform: translate(-50%, -50%); }
+  /* ---------- co-presence ---------- */
+  .coprow { padding: 8px 2px; border-bottom: 1px dotted var(--line); }
+  .coprow:last-of-type { border-bottom: 0; }
+  .coprow.contested { background: rgba(255,107,129,.07); border-radius: 9px;
+                      padding: 8px; margin: 0 -4px; }
+  .coptop { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .coptop .n { margin-left: auto; color: var(--dim); font-size: 12px;
+               font-variant-numeric: tabular-nums; }
+  .copwho { margin-top: 5px; }
+  .copwho .chip { font-size: 11.5px; padding: 3px 9px; }
+  .npcchip { border-style: dashed; color: var(--dim); }
+  /* ---------- wounded ---------- */
+  .woundrow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+              padding: 7px 0; border-bottom: 1px dotted var(--line); }
+  .woundrow:last-of-type { border-bottom: 0; }
+  .woundrow .nm { flex: 1; min-width: 0; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
+  .woundrow .hp { font-variant-numeric: tabular-nums; font-size: 12px;
+                  color: var(--dim); }
+  .woundrow.down .hp { color: var(--danger); font-weight: 700; }
+  .hpbar { flex: 1 1 100%; height: 4px; border-radius: 2px;
+           background: var(--panel2); overflow: hidden; }
+  .hpbar i { display: block; height: 100%; border-radius: 2px;
+             background: linear-gradient(90deg, #c14953, #5ce08a); }
+  .woundrow.down .hpbar i { background: var(--danger); }
   #view-map aside { width: 272px; flex-shrink: 0; display: flex;
                     flex-direction: column; gap: 14px; }
   .teamrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px;
@@ -539,13 +604,18 @@
   #boverlay { position: absolute; inset: 0; }
   .bhale { position: absolute; text-align: center; cursor: pointer; z-index: 2;
            transform: translate(-50%, -50%) scale(var(--binv, 1)); }
-  .bhale .hbox { width: 44px; height: 34px; margin: 0 auto; border-radius: 10px;
+  .bhale .hbox { position: relative;
+                 width: 44px; height: 34px; margin: 0 auto; border-radius: 10px;
                  display: flex; align-items: center; justify-content: center;
                  font-size: 16px;
                  background: linear-gradient(160deg, #262e56, #1a2038);
                  border: 1px solid var(--line2);
                  box-shadow: 0 3px 10px rgba(0,0,0,.45);
                  transition: border-color .13s; }
+  /* 44 wide already; this makes up the missing 10px of height. */
+  .bhale .hbox::before { content: ""; position: absolute; left: 50%; top: 50%;
+                 width: 44px; height: 44px; border-radius: 12px;
+                 transform: translate(-50%, -50%); }
   .bhale:hover .hbox { border-color: var(--accent); }
   .bhale.sel .hbox { outline: 2px solid var(--accent);
                      box-shadow: 0 0 14px rgba(124,92,255,.55); }
@@ -562,6 +632,12 @@
           font-size: 8.5px; font-weight: 800; display: flex;
           align-items: center; justify-content: center; cursor: grab;
           box-shadow: 0 0 10px rgba(124,92,255,.55); user-select: none; }
+  /* 44px grab ring, as on the island map. NPC dots sit 26 canvas units apart
+     under a hale, so the rings overlap at low zoom — that is what pinch zoom
+     is now for, and the topmost dot still wins the tap. */
+  .bnpc::before { content: ""; position: absolute; left: 50%; top: 50%;
+          width: 44px; height: 44px; border-radius: 50%;
+          transform: translate(-50%, -50%); }
   .bnpc::after { content: ""; position: absolute; inset: -2px;
           border-radius: 50%; border: 2px solid rgba(124,92,255,.8);
           animation: bping 2.6s ease-out infinite; }
@@ -588,7 +664,10 @@
   #tokengate { position: fixed; inset: 0; background: rgba(6,8,14,.94);
                display: flex; align-items: center; justify-content: center;
                z-index: 100; }
-  #tokengate .card { width: 340px; box-shadow: 0 12px 48px rgba(0,0,0,.6); }
+  /* Never wider than the screen: a hard 340px overflowed every phone narrower
+     than a 375pt iPhone, and the gate is the one screen you cannot skip. */
+  #tokengate .card { width: min(340px, calc(100vw - 32px));
+                     box-shadow: 0 12px 48px rgba(0,0,0,.6); }
   #tokengate input { width: 100%; margin: 10px 0; }
   #tokengate button { width: 100%; padding: 9px; background: var(--grad);
                       border: 0; border-radius: 9px; color: #fff;
@@ -612,6 +691,141 @@
   .rprev .rp-noimg { margin-top: 16px; padding: 22px; text-align: center;
                      border: 1px dashed #4a4d55; border-radius: 5px;
                      color: #949ba4; font-size: 12.5px; }
+
+  /* Wide content scrolls inside its own box; the page body never scrolls in x.
+     Tables are the main offender — they were rendering entirely off-screen. */
+  .tblwrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Long unbreakable tokens — bucket ids, place keys, urls — have no space to
+     wrap at and will push the whole page sideways on a phone. The Lines
+     editor's `line:1490490999523377273` heading was doing exactly that. */
+  code, .lrow .nm, .card h2 { overflow-wrap: anywhere; }
+
+  /* ==================================================================
+     PHONE AND SMALL TABLET — both devs work from a phone.
+
+     Everything below 820px is one column. That number is where the
+     desktop shape stops working rather than a device size: the list pane
+     is a fixed 340px and the editor needs about 340px of its own, so
+     below roughly 820px (once the nav rail and the gutters are paid for)
+     the editor is squeezed to nothing. Measured before this block
+     existed, the editor was 34px wide at left 436 on twelve of fifteen
+     tabs — off the screen entirely, on a 375px viewport.
+     The audit that produced these rules is MOBILE_AUDIT_B.md.
+     ================================================================== */
+  @media (max-width: 820px) {
+
+    /* ---- shell: the nav rail becomes a scrolling strip across the top.
+       Fifteen tabs do not fit in a bottom bar and will not fit as a
+       column that costs 58px of a 375px screen forever. A horizontal
+       strip costs height once and gives the whole width back. ---- */
+    #shell { grid-template-columns: minmax(0, 1fr); }
+    #side { position: sticky; top: 0; height: auto; flex-direction: row;
+            align-items: center; gap: 8px; padding: 5px 8px;
+            border-right: 0; border-bottom: 1px solid var(--line); }
+    #side .brand { display: none; }
+    #side nav { flex-direction: row; flex: 1; min-width: 0; gap: 5px;
+                overflow-x: auto; overflow-y: hidden; padding: 0;
+                scrollbar-width: none; }
+    #side nav::-webkit-scrollbar { height: 0; }
+    #side .tab { flex-shrink: 0; min-height: 44px; padding: 8px 13px;
+                 justify-content: flex-start; }
+    /* Undo the 940px icon-only rule: with the full width available the
+       labels are what make fifteen tabs navigable by thumb. */
+    #side .tab .lb { display: inline; }
+    #sidefoot { flex-shrink: 0; padding: 0; border-top: 0; }
+    #sidefoot .hint { display: none; }
+    /* Only the pulse survives — there is no room for a timestamp, and the
+       dot is the part anyone actually reads. Grey when not live. */
+    #status { font-size: 0; gap: 0; }
+    #status:not(.live)::before { content: ""; width: 9px; height: 9px;
+              border-radius: 50%; background: var(--faint); }
+
+    /* ---- topbar: wraps instead of overflowing. This alone was pushing
+       the document to 565px wide on the map tab. ---- */
+    #topbar { flex-wrap: wrap; gap: 8px; padding: 9px 12px; }
+    #topbar > span:not([id]) { display: none; }   /* the desktop spacer */
+    #pagetitle { flex: 1 1 auto; min-width: 0; font-size: 15px;
+                 overflow: hidden; text-overflow: ellipsis;
+                 white-space: nowrap; }
+    #pagetitle small { display: none; }
+    #islandsw { order: 5; flex: 1 1 100%; }       /* its own full-width row */
+    #islandsw button { flex: 1; min-height: 40px; }
+    #newplacebtn, #arrangebtn { min-height: 40px; }
+    #cfgbtn { min-height: 40px; min-width: 44px; }
+
+    main { padding: 12px 12px 26px; }
+
+    /* ---- every list-and-editor tab stacks ----
+       The list is a picker, so it keeps a cap and its own scroll. The
+       editor is the work surface, so it is freed entirely and scrolls
+       with the page: a full-height inner scroller on a phone means the
+       page will not move while your thumb is inside it. */
+    .view.active { flex-direction: column; align-items: stretch; gap: 12px; }
+    .listpane, .editor { width: 100%; max-width: none; min-width: 0;
+                         flex: 0 0 auto; }
+    .listpane { max-height: 44vh; overflow-y: auto; }
+    .editor { max-height: none; overflow: visible; }
+
+    /* ---- the map is combat truth now; it gets the full width and the
+       side cards go underneath it ---- */
+    #view-map aside { width: 100%; flex-shrink: 1; }
+    #mapwrap { width: 100%; flex: 0 0 auto; }
+    .benchchips { max-height: 30vh; }
+
+    /* ---- forms ---- */
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    .rprev .rp-fields { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+    .fbar { flex-wrap: wrap; }
+    .fbar select { flex: 1 1 100%; }
+    /* 16px is the threshold below which iOS Safari zooms the whole page on
+       focus, which then leaves the dev zoomed in on a form they cannot
+       scroll out of. Nothing focusable may be smaller. */
+    input, select, textarea { min-height: 42px; font-size: 16px; }
+    input[type=checkbox] { min-height: 22px; width: 22px; height: 22px; }
+    .search { margin-bottom: 10px; }
+
+    /* ---- 44px hit areas everywhere. The approvals tab already did this
+       and is the model the rest of the file now follows. ---- */
+    .btn { min-height: 44px; padding: 10px 16px; }
+    .btn.mini { min-height: 38px; padding: 8px 14px; font-size: 13px; }
+    .seg button { min-height: 40px; padding: 8px 14px; }
+    .fchip { display: inline-flex; align-items: center; min-height: 34px;
+             padding: 7px 12px; font-size: 12px; }
+    .chip { min-height: 38px; padding: 8px 13px; }
+    .pip { width: 38px; height: 34px; }
+    /* A checkbox is 22px and always will be — what has to be thumb-sized is
+       the LABEL wrapping it, which is the real target. The plain labels above
+       inputs are captions, not controls, so they are left alone. */
+    .frm label:has(input[type=checkbox]) { display: flex; align-items: center;
+             gap: 8px; min-height: 44px; margin-top: 4px; }
+    .lrow, .prow, .teamrow { min-height: 44px; padding: 9px; }
+    .grphdr, .cathdr { min-height: 38px; display: flex; align-items: center; }
+    .invrow, .memrow, .lbrow { min-height: 40px; }
+  }
+
+  /* Tap-to-read (see the listener above the toast). On a touch device these
+     carry information that hover would otherwise be the only way to reach, so
+     they get a hint that there is more here — a dotted underline where the
+     element is text, and a tap highlight everywhere. Deliberately scoped to
+     coarse pointers: on a desktop the hover tooltip already says it and the
+     underline would be clutter on every badge in the file. */
+  @media (hover: none), (pointer: coarse) {
+    .sub[title], .nm[title], .fx[title] {
+      text-decoration: underline dotted var(--faint);
+      text-underline-offset: 3px; }
+    .sub[title], .nm[title], .fx[title], .fchip[title], .isldot[title],
+    .nowhere[title], .badge[title], .chip[title], .pip[title], .bnpc[title],
+    .npcdot[title], .npcchip[title] {
+      -webkit-tap-highlight-color: rgba(124,92,255,.3); }
+  }
+
+  /* Narrow phones: the last few two-across things go single file. */
+  @media (max-width: 430px) {
+    .btnrow .btn { flex: 1 1 100%; }
+    .npchead { flex-wrap: wrap; }
+    .bmaphead { gap: 6px; }
+    .bmaphead .spacer { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -691,6 +905,25 @@
       <h2 id="placename"></h2>
       <div class="hint" id="placedesc"></div>
       <div class="who" id="placewho"></div>
+    </div>
+    <!-- B3. Co-presence is the PLACE now, and activation is silent, so this
+         card is the only surface that ever tells a dev why combat seated who
+         it seated. It is not scoped to the island on purpose: a place with no
+         island still holds bodies. -->
+    <div class="card" id="copcard">
+      <h2>Who is standing together</h2>
+      <div id="cop"><p class="hint">Loading…</p></div>
+      <p class="hint" style="margin-top:8px">More than one team at a place is
+      the condition under which a hostile card opens rounds. Nothing announces
+      it, so this is where you see it.</p>
+    </div>
+    <!-- B6c. Nothing anywhere showed a dev a player's current HP. Once wounds
+         persist and death is automatic and silent, this is the only answer to
+         who is hurt and who is down. It sits beside co-presence because they
+         are the same question asked twice. -->
+    <div class="card" id="woundcard">
+      <h2>Wounded</h2>
+      <div id="wounded"><p class="hint">Loading…</p></div>
     </div>
     <div class="card" id="benchcard" style="display:none">
       <h2>Off the map</h2>
@@ -893,8 +1126,15 @@ const LOOPBACK_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i;
 // machine: the gate used to pre-fill 127.0.0.1 and then pin it in localStorage
 // forever, which permanently pointed remote devs at their own empty localhost.
 // Drop it in favour of the funnel; a deliberate non-loopback choice still wins.
+// ...but the dev sitting AT the bot machine is the case that rule broke. They
+// open the codex copy, type the loopback address into the gate on purpose, and
+// the next load throws it away and sends them to the funnel. So the strip now
+// only applies to an address nobody chose: once the gate has been submitted
+// with a loopback address, that is a decision and it sticks.
 let storedAPI = localStorage.getItem("ht_api_base");
-if (storedAPI && PUBLIC_API && !SERVED_BY_BOT && LOOPBACK_RE.test(storedAPI)) {
+const API_PINNED = localStorage.getItem("ht_api_pinned") === "1";
+if (storedAPI && PUBLIC_API && !SERVED_BY_BOT && !API_PINNED
+    && LOOPBACK_RE.test(storedAPI)) {
   localStorage.removeItem("ht_api_base");
   storedAPI = null;
 }
@@ -967,6 +1207,58 @@ function setStatus(ok) {
 const overlay = $("#overlay"), wrap = $("#mapwrap"), img = $("#underlay"),
       zoomer = $("#zoomer");
 
+/* ---------- pinch zoom ----------
+   Both maps zoomed on the wheel and nothing else, so on a phone they were
+   stuck at 1x forever — and the dblclick that resets the zoom existed purely
+   to undo a zoom a phone could never reach. This is the missing half.
+
+   Shared by the island map and the base maps. It tracks live pointers on the
+   wrapper; the moment there are two it takes over, scaling by how much the
+   gap between the fingers has grown and keeping the point under the midpoint
+   of the two fingers pinned where it started. That is what every map app
+   does, and it is what a thumb and forefinger expect.
+
+   One-finger pan and marker dragging stay exactly as they were. They do have
+   to yield, though: a finger already dragging a pawn when a second lands
+   would otherwise drag and pinch at once, and dragging a pawn WRITES a
+   player's position. So the caller passes `yield_`, which it uses to abandon
+   whatever one-finger gesture was in flight. Nothing is saved on the way out;
+   the map simply repaints where things really are. */
+function addPinchZoom(el, getView, apply, yield_) {
+  const pts = new Map();
+  let base = null;
+  const state_ = { active: () => pts.size >= 2 };
+  el.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;      // the wheel already serves mice
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { base = null; if (yield_) yield_(); }
+  });
+  el.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size !== 2) return;
+    e.preventDefault();
+    const [a, b] = [...pts.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (d < 1) return;
+    const r = el.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+    const v = getView();
+    if (!base) { base = { d, mx, my, k: v.k, tx: v.tx, ty: v.ty }; return; }
+    const k = Math.min(Math.max(base.k * (d / base.d), 1), 8);
+    v.k = k;
+    // Keep the pinch's starting midpoint under the fingers, and let the
+    // midpoint's own travel pan the map.
+    v.tx = mx - (base.mx - base.tx) * (k / base.k);
+    v.ty = my - (base.my - base.ty) * (k / base.k);
+    apply();
+  }, { passive: false });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) base = null; };
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", up);
+  return state_;
+}
+
 /* ---------- pan & zoom ---------- */
 let view = { k: 1, tx: 0, ty: 0 };
 function applyView() {
@@ -988,12 +1280,22 @@ wrap.addEventListener("wheel", e => {
   applyView();
 }, { passive: false });
 let pan = null;
+/* Abandon any one-finger gesture the moment a pinch starts. A pawn drag
+   writes a player's position, so this is a correctness guard, not polish. */
+function cancelMapGesture() {
+  pan = null;
+  if (!drag) return;
+  if (drag.cancel) drag.cancel();
+  drag = null;
+  render();
+}
+const PINCH = addPinchZoom(wrap, () => view, applyView, cancelMapGesture);
 wrap.addEventListener("pointerdown", e => {
-  if (e.target !== img) return;
+  if (e.target !== img || PINCH.active()) return;
   pan = { x: e.clientX, y: e.clientY };
 });
 wrap.addEventListener("pointermove", e => {
-  if (!pan) return;
+  if (!pan || PINCH.active()) return;
   view.tx += e.clientX - pan.x;
   view.ty += e.clientY - pan.y;
   pan = { x: e.clientX, y: e.clientY };
@@ -1031,6 +1333,10 @@ async function saveToken() {
   }
   localStorage.setItem("ht_token", TOKEN);
   localStorage.setItem("ht_api_base", API);
+  // A loopback address typed into the gate is a deliberate choice by someone
+  // sitting at the bot machine; remember that so the staleness strip above
+  // leaves it alone.
+  localStorage.setItem("ht_api_pinned", LOOPBACK_RE.test(API) ? "1" : "0");
   $("#tokengate").style.display = "none";
   loadIslands().then(() => { loadUnderlay(); refresh();
                              switchView(Views.current); });
@@ -1236,6 +1542,44 @@ document.addEventListener("click", ev => {
 }));
 // The one toast(). `err` styles it as a failure — passing it is the only way a
 // caller can make an error read as one, so keep the parameter.
+/* ---------- tap to read a tooltip ----------
+   Thirty-six title= attributes, and on a phone there is no hover — so on a
+   touch device that information does not exist at all. Some of it is the ONLY
+   copy: the exact wallet figure behind a compact 1.2M, an item's description
+   in an inventory row, a skill branch's unlock condition, the full effect
+   summary behind a badge clipped at 138px, how a cast member joined a line.
+
+   One listener rather than a tagged attribute on twenty call sites, because
+   the information-bearing tooltips already carry distinctive classes and the
+   decorative ones (a labelled button saying what it does) do not. That is the
+   whole selector below: data elements in, labelled controls out.
+
+   Two rules keep it from stealing taps that belong to something else:
+
+     * If a real control sits INSIDE the tipped element — the ✕ on a cast chip
+       — the tap belongs to the control and this bows out entirely.
+     * If the tipped element IS a control (a skill pip), the tip shows AND the
+       control still fires. Only for plain data elements does the tip take the
+       tap, so tapping a row's name still selects it and tapping its money
+       reads the money.
+
+   Coarse pointers only: on a desktop, hover already answers this and a toast
+   on every click would be noise. */
+const TIPPED = ".sub, .nm, .fx, .fchip, .isldot, .nowhere, .badge, .chip,"
+             + " .pip, .bnpc, .npcdot, .npcchip, .bars i";
+const COARSE = () => window.matchMedia("(hover: none), (pointer: coarse)").matches;
+document.addEventListener("click", ev => {
+  if (!COARSE()) return;
+  const tip = ev.target.closest(TIPPED);
+  if (!tip) return;
+  const text = (tip.getAttribute("title") || "").trim();
+  if (!text) return;
+  const act = ev.target.closest("a, button, input, select, textarea");
+  if (act && act !== tip && tip.contains(act)) return;   // the control owns it
+  if (!/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(tip.tagName)) ev.stopPropagation();
+  toast(text);
+}, true);
+
 function toast(msg, err) {
   let t = $("#toast");
   if (!t) {
@@ -1387,7 +1731,39 @@ function switchView(v) {
   if (v === "regions") Regions.load();
   if (v === "locations") Locations.load();
   if (v === "bases") Bases.load();
+  if (STACKED()) window.scrollTo({ top: 0 });
 }
+
+/* ---------- stacked master-detail ----------
+   Below 820px the list pane and the editor stop sitting side by side and
+   stack instead, which is the only shape that fits a phone. That creates
+   the classic stacked-master-detail problem: you tap a row, the editor
+   below the fold fills in, and nothing appears to happen.
+
+   Rather than teach twelve tabs about it, this listens once. Every tab
+   uses the same `.listpane` / `.editor` pair, so one delegated listener
+   covers all of them, and it runs after the tab's own click handler has
+   repainted. A tap that lands on a control INSIDE the list (the search
+   box, a filter chip, a group header) is not a selection, so those are
+   left alone — otherwise typing in the search field would throw the dev
+   down the page on every keystroke. */
+const STACKED = () => window.matchMedia("(max-width: 820px)").matches;
+document.querySelectorAll(".view").forEach(view => {
+  const pane = view.querySelector(".listpane"), ed = view.querySelector(".editor");
+  if (!pane || !ed) return;
+  pane.addEventListener("click", ev => {
+    if (!STACKED()) return;
+    if (ev.target.closest("input, textarea, select, .seg, .fchip, .grphdr, .cathdr"))
+      return;
+    if (!ev.target.closest(".lrow, .prow, .chip, .npcrow, [data-key], [data-id]"))
+      return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const top = ed.getBoundingClientRect().top + window.scrollY - 56;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }));
+  });
+});
+
 /* ================= MAP ================= */
 function pct(v, axis) {
   const c = state.canvas;
@@ -1507,6 +1883,7 @@ function render() {
     };
     teams.appendChild(row);
   }
+  renderNpcDots();
   const benched = state.players.filter(p => !p.place);
   $("#benchcard").style.display = benched.length ? "" : "none";
   const bench = $("#bench");
@@ -1517,6 +1894,120 @@ function render() {
     chip.innerHTML = `<span class="swatch" style="background:${teamColor[pl.team] || "#666"}"></span>${esc(pl.name)}`;
     chip.onpointerdown = e => startDrag(e, { player_id: pl.id }, chip, pl.name);
     bench.appendChild(chip);
+  }
+}
+/* ---------- B2 + B3: NPCs on the map, and co-presence ----------
+   Co-presence is answered by ONE function server-side (dash_copresence_at),
+   built on the same teams_present_at the encounter rail uses. The map must
+   never derive a second opinion from the raw position dict: if the map and
+   the seating disagreed, the map would be the wrong one, and nobody would
+   find out until someone was killed by it. So everything here renders from
+   that payload and computes nothing of its own. */
+let COP = null;                       // last /api/dash/copresence payload
+async function loadCopresence() {
+  try { COP = await api("/api/dash/copresence"); }
+  catch (e) { COP = null; return; }
+  renderCopresence();
+  if (state) render();                // the NPC dots come from this payload
+}
+function copAt(key) {
+  return COP && (COP.places || []).find(r => r.place === key) || null;
+}
+function renderCopresence() {
+  const box = $("#cop");
+  if (!box) return;
+  const rows = (COP && COP.places) || [];
+  if (!rows.length) {
+    box.innerHTML = "<p class='hint'>Nobody is standing anywhere yet.</p>";
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const bodies = r.players.length + r.npcs.length;
+    const who = [
+      ...r.players.map(p => `<span class="chip" style="cursor:default">
+        <span class="swatch" style="background:${teamColor[p.team] || "#666"}"></span>
+        ${esc(p.name)}${p.dead ? " ☠" : ""}${p.traveling ? " ✈" : ""}</span>`),
+      ...r.npcs.map(n => `<span class="chip npcchip" style="cursor:default"
+        title="${esc(n.affiliation || "no affiliation")}">${esc(n.name)}${
+        n.at_base ? " ⌂" : ""}</span>`),
+    ].join(" ");
+    return `<div class="coprow${r.contested ? " contested" : ""}">
+      <div class="coptop">
+        <b>${esc(r.name)}</b>
+        ${r.island ? "" : '<span class="nowhere">off map</span>'}
+        ${r.contested ? `<span class="badge dead">${r.teams.length} teams</span>` : ""}
+        ${r.rounds_open ? '<span class="badge dead">rounds open</span>' : ""}
+        <span class="n">${bodies}</span>
+      </div>
+      <div class="copwho">${who}</div>
+    </div>`;
+  }).join("");
+}
+/* ---------- B6c: the wounded list ----------
+   The dashboard's three HP references all set MAX (`hp_bonus` for players,
+   `combat.hp` for NPCs). Nothing showed a dev what a body's remaining health
+   actually was, and under the ruling that death is automatic and silent, that
+   is the one number a dev needs. Heals go through /api/dash/hp, which writes
+   the CURRENT field — the NPC input used to write `combat.hp`, which seating
+   read as both current and max, so every hand-heal rewrote the sheet. */
+let WOUNDED = null;
+async function loadWounded() {
+  try { WOUNDED = await api("/api/dash/wounded"); }
+  catch (e) { WOUNDED = null; return; }
+  renderWounded();
+}
+function renderWounded() {
+  const box = $("#wounded");
+  if (!box) return;
+  const rows = (WOUNDED && WOUNDED.wounded) || [];
+  if (!rows.length) {
+    box.innerHTML = "<p class='hint'>Everyone is at full health.</p>";
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const pctv = r.max ? Math.round(r.hp / r.max * 100) : 0;
+    return `<div class="woundrow${r.down ? " down" : ""}">
+      <span class="nm">${esc(r.name)}</span>
+      ${r.kind === "npc" ? '<span class="badge">NPC</span>' : ""}
+      ${r.down ? '<span class="badge dead">down</span>' : ""}
+      <span class="hp">${r.hp}/${r.max}</span>
+      <button class="btn mini" data-heal="${esc(r.kind)}:${esc(r.id)}">Full</button>
+      <div class="hpbar"><i style="width:${pctv}%"></i></div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll("[data-heal]").forEach(btn => btn.onclick = () => {
+    const [kind, ...rest] = btn.dataset.heal.split(":");
+    api("/api/dash/hp", { kind, id: rest.join(":"), full: true,
+                          author: localStorage.getItem("ht_author") || "" })
+      .then(j => { toast(`healed to ${j.hp}/${j.max}`); loadWounded(); })
+      .catch(e => toast(e.message, true));
+  });
+}
+/* An NPC standing at a place gets a dot beside the pin, offset around it so a
+   garrison of six does not stack into one marker. Same 44px hit ring as a
+   pawn — see the .place comment — because on a phone this is how a dev picks
+   one out. */
+function renderNpcDots() {
+  if (!COP || !state) return;
+  for (const r of COP.places || []) {
+    const p = state.places[r.place];
+    if (!p || !r.npcs.length) continue;
+    r.npcs.forEach((n, i) => {
+      const ang = (i / Math.max(r.npcs.length, 1)) * Math.PI * 2;
+      const el = document.createElement("div");
+      el.className = "npcdot";
+      el.dataset.npc = n.key;
+      el.style.left = pct(p.x, "x");
+      el.style.top = pct(p.y, "y");
+      el.style.setProperty("--ox", (Math.cos(ang) * 17).toFixed(1) + "px");
+      el.style.setProperty("--oy", (Math.sin(ang) * 17).toFixed(1) + "px");
+      el.style.background = teamColor[n.team] || "#6b7290";
+      el.textContent = initials(n.name);
+      el.title = n.name + (n.team_name ? " — " + n.team_name : "")
+                        + (n.at_base ? " (at base)" : "");
+      el.onclick = ev => { ev.stopPropagation(); showPlace(r.place); };
+      overlay.appendChild(el);
+    });
   }
 }
 function placeClicked(key) {
@@ -1538,13 +2029,26 @@ function showPlace(key) {
   const card = $("#placecard");
   card.style.display = "";
   const here = state.players.filter(pl => pl.place === key);
+  // The NPCs standing here come from the co-presence payload, never from a
+  // second read of the position dict — see the note above loadCopresence.
+  const cop = copAt(key);
+  const npcs = (cop && cop.npcs) || [];
   card.innerHTML = `
     <h2>${esc(p.name)}${p.new ? ' <span class="badge off">undiscovered</span>' : ""}</h2>
+    ${cop && cop.contested ? `<div style="margin-bottom:6px">
+      <span class="badge dead">${cop.teams.length} teams here</span>
+      ${cop.rounds_open ? '<span class="badge dead">rounds open</span>' : ""}
+      </div>` : ""}
     <div class="hint">${esc(p.desc || "")}${p.new
       ? `<br>found by: ${esc((p.discovered_by || []).join(", ") || "no one yet")}` : ""}</div>
     <div class="who" style="margin-top:6px">${here.length
       ? here.map(pl => `<div><span class="swatch" style="display:inline-block;background:${teamColor[pl.team] || "#666"}"></span> ${esc(pl.name)}${esc(travelTag(pl))}</div>`).join("")
-      : "<div class='hint'>nobody here</div>"}</div>
+      : "<div class='hint'>no players here</div>"}</div>
+    ${npcs.length ? `<div class="who" style="margin-top:4px">${npcs.map(n =>
+      `<div><span class="swatch" style="display:inline-block;background:${teamColor[n.team] || "#6b7290"}"></span>
+       ${esc(n.name)}<span class="muted">${n.at_base ? " · at base" : ""}${
+       n.team_name ? " · " + esc(n.team_name) : ""}</span></div>`).join("")}</div>`
+      : "<div class='hint'>no NPCs here</div>"}
     <div class="btnrow" style="margin-top:10px">
       <button class="btn mini" id="plc-edit">✎ Edit place</button>
     </div>`;
@@ -1672,7 +2176,11 @@ function nearestPlace(xy, maxDist) {
 }
 function startDrag(e, target, el, label) {
   e.preventDefault();
-  drag = { target, el };
+  drag = { target, el, cancel() {
+    el.classList.remove("dragging");
+    el.onpointermove = el.onpointerup = null;
+    document.querySelectorAll(".place").forEach(pe => pe.classList.remove("droptarget"));
+  } };
   el.classList.add("dragging");
   el.setPointerCapture(e.pointerId);
   el.onpointermove = ev => {
@@ -1725,8 +2233,8 @@ $("#arrangebtn").onclick = () => {
 function startPlaceDrag(e, key, el) {
   e.preventDefault();
   e.stopPropagation();
-  drag = { key, el };
   const dot = el.querySelector(".dot");
+  drag = { key, el, cancel() { dot.onpointermove = dot.onpointerup = null; } };
   dot.setPointerCapture(e.pointerId);
   let xy = null;
   dot.onpointermove = ev => {
@@ -1745,25 +2253,87 @@ function startPlaceDrag(e, key, el) {
       .catch(err => { toast(err.message, true); render(); });
   };
 }
-/* A place from the unplaced tray, dropped onto the map, gets its first
-   coordinate. Same endpoint as an Arrange drag — the server takes the island
-   from the place itself, so there is nothing to keep in sync here. */
-wrap.addEventListener("dragover", ev => {
-  if ((ev.dataTransfer.types || []).includes("text/plain")) ev.preventDefault();
-});
-wrap.addEventListener("drop", ev => {
-  const raw = ev.dataTransfer.getData("text/plain") || "";
-  if (!raw.startsWith("unplaced:")) return;
-  ev.preventDefault();
-  const key = raw.slice(9);
-  const xy = canvasXY(ev);
+/* ---------- the unplaced tray ----------
+   A place from the tray, dropped onto the map, gets its first coordinate.
+   Same endpoint as an Arrange drag — the server takes the island from the
+   place itself, so there is nothing to keep in sync here.
+
+   This was the one control in the file still built on HTML5 drag and drop,
+   which does not fire from touch at all, so on a phone it was completely
+   inert. It is also the ONLY way to give a new island's places their first
+   coordinates, and Te Motu Pūrākau is live with most of its places unplaced.
+   Rebuilt below on the same pointer-event path every other drag already uses.
+
+   It gets a second mode as well, because dragging assumes the tray and the
+   map are on screen together and on a phone the tray sits underneath the map.
+   So a tap arms the chip and the next tap on the map places it. */
+let armedPlace = null;
+function overMap(ev) {
+  const r = wrap.getBoundingClientRect();
+  return ev.clientX >= r.left && ev.clientX <= r.right
+      && ev.clientY >= r.top && ev.clientY <= r.bottom;
+}
+function placeUnplaced(key, xy) {
   api("/api/map/place-coord", {
     place: key,
     x: Math.round(Math.min(Math.max(xy.x, 0), state.canvas.w)),
     y: Math.round(Math.min(Math.max(xy.y, 0), state.canvas.h)),
   }).then(() => { toast(key + " placed"); refresh(); })
     .catch(err => toast(err.message, true));
-});
+}
+function disarmUnplaced() {
+  armedPlace = null;
+  document.body.classList.remove("arming");
+  document.querySelectorAll("[data-unplaced].armed")
+          .forEach(e => e.classList.remove("armed"));
+}
+function armUnplaced(key, el) {
+  if (armedPlace === key) { disarmUnplaced(); return; }
+  disarmUnplaced();
+  armedPlace = key;
+  document.body.classList.add("arming");
+  el.classList.add("armed");
+  toast("Now tap the map to place " + key);
+  wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+/* Capture phase, so an armed tap beats the .place click handler underneath —
+   otherwise tapping near an existing pin would open that pin's card instead
+   of placing the armed one. */
+wrap.addEventListener("click", ev => {
+  if (!armedPlace) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const key = armedPlace;
+  disarmUnplaced();
+  placeUnplaced(key, canvasXY(ev));
+}, true);
+function wireUnplaced(el) {
+  const key = el.dataset.unplaced;
+  el.onpointerdown = e => {
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    // Capture is an optimisation, not a requirement: it keeps the pointer
+    // bound to the chip once the finger leaves it. If the pointer is already
+    // gone the call throws, and an uncaught throw here would take the whole
+    // handler with it and leave the tray dead again.
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    el.onpointermove = ev => {
+      if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 7) return;
+      moved = true;
+      el.classList.add("dragging");
+      wrap.classList.toggle("droparmed", overMap(ev));
+    };
+    el.onpointerup = ev => {
+      el.onpointermove = el.onpointerup = null;
+      el.classList.remove("dragging");
+      wrap.classList.remove("droparmed");
+      if (!moved) { armUnplaced(key, el); return; }   // a tap, not a drag
+      if (!overMap(ev)) return;
+      placeUnplaced(key, canvasXY(ev));
+    };
+  };
+}
 
 /* The map has four states, and only one of them is a map: art + pins, art but
    nothing pinned, no art yet, and an island whose seed file failed to load.
@@ -1791,9 +2361,10 @@ function renderIslandCard() {
     "</p>" +
     (up.length
       ? '<p class="hint" style="margin-top:10px"><b>' + up.length +
-        " with no position</b> — drag each onto the map:</p>" +
+        " with no position</b> — drag each onto the map, or tap one and then "
+        + "tap the map:</p>" +
         '<div class="unplaced">' + up.map(k =>
-          '<span draggable="true" data-unplaced="' + esc(k) + '">' +
+          '<span data-unplaced="' + esc(k) + '">' +
           esc(k) + "</span>").join("") + "</div>"
       : "") +
     '<button class="btn ' + (state.active ? "danger" : "primary") +
@@ -1801,9 +2372,13 @@ function renderIslandCard() {
       (state.active ? "Deactivate island" : "Activate island") + "</button>";
   const btn = $("#islandtoggle");
   if (btn) btn.onclick = () => toggleIsland(state.island, !state.active);
-  card.querySelectorAll("[data-unplaced]").forEach(el =>
-    el.addEventListener("dragstart", ev =>
-      ev.dataTransfer.setData("text/plain", "unplaced:" + el.dataset.unplaced)));
+  card.querySelectorAll("[data-unplaced]").forEach(wireUnplaced);
+  // The card is rebuilt on every repaint, so an armed chip loses its mark.
+  if (armedPlace) {
+    const again = card.querySelector('[data-unplaced="' + CSS.escape(armedPlace) + '"]');
+    if (again) again.classList.add("armed");
+    else disarmUnplaced();          // it just got placed, or the island changed
+  }
 }
 async function toggleIsland(slug, want) {
   if (!confirm(want
@@ -1853,6 +2428,11 @@ async function refresh() {
       renderMapChrome();
       render();
       setStatus(true);
+      // Co-presence and the wounded list ride the same poll, and deliberately
+      // do NOT block the map: an older bot with neither route must still draw
+      // the island.
+      loadCopresence();
+      loadWounded();
     } catch (e) {
       if (e.message !== "unauthorized") setStatus(false);
     }
@@ -2312,6 +2892,64 @@ const Npcs = {
      and laniʻōpua are Reprise without a forge block. */
   forged(n) { return !!n.forged; },
   owner(n) { return n.owner || null; },
+  /* ---------- B4: where this NPC stands ----------
+     There was no write path for NPC placement anywhere in the route table.
+     Putting somebody on the map meant a GPS admin command, which is why the
+     map was a dev convenience rather than the thing devs use — and under the
+     co-presence ruling the map is now what decides who gets seated in a fight.
+
+     Two states, deliberately distinguished. PINNED means an explicit position
+     in npc_positions. Unpinned means at base and untracked, in which case they
+     still show a place because they inherit their base's — so the control says
+     which it is, and Send back to base is only offered when there is a pin to
+     clear. */
+  placeRow(n) {
+    const places = (this.data && this.data.places) || {};
+    const cur = n.pinned ? (n.place || "") : "";
+    const opts = Object.entries(places)
+      .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+      .map(([k, nm]) => `<option value="${esc(k)}"${k === cur ? " selected" : ""}>`
+                        + `${esc(nm)}</option>`).join("");
+    const here = n.place
+      ? (n.pinned
+         ? `Standing at <b>${esc(n.place_name || n.place)}</b>.`
+         : `At base — reads as <b>${esc(n.place_name || n.place)}</b>`
+           + (n.station ? ` because they are stationed at ${esc(n.station)}` : "")
+           + ", with no position of their own.")
+      : "Off the map — at base and untracked.";
+    return `
+      <label>Where they stand</label>
+      <p class="hint" style="margin:0 0 6px">${here}</p>
+      <div class="btnrow" style="margin-top:0">
+        <select id="nf-place" style="flex:1;min-width:0">
+          <option value="">— pick a place —</option>${opts}
+        </select>
+        <button class="btn primary" id="nf-placego">Place</button>
+        ${n.pinned ? '<button class="btn" id="nf-placeclr">Send back to base</button>' : ""}
+      </div>`;
+  },
+  wirePlaceRow(n) {
+    const go = $("#nf-placego");
+    if (go) go.onclick = () => {
+      const place = $("#nf-place").value;
+      if (!place) { toast("Pick a place first", true); return; }
+      this.place(n, place);
+    };
+    const clr = $("#nf-placeclr");
+    if (clr) clr.onclick = () => this.place(n, null);
+  },
+  place(n, place) {
+    api("/api/dash/npc-place",
+        { npc: n.key, place, author: localStorage.getItem("ht_author") || "" })
+      .then(j => {
+        toast(place ? `${n.name} placed` : `${n.name} sent back to base`);
+        if (j && j.trip_cancelled) toast(`${n.name} was mid-march — that march is off`);
+        this.load();
+        // The map reads the same store, so keep it honest in the same breath.
+        if (typeof refresh === "function") refresh();
+      })
+      .catch(e => toast(e.message, true));
+  },
   hasPortrait(n) { return !!(n.local_image || n.gif); },
   hasCombat(n) {
     const c = n.combat || {};
@@ -2489,6 +3127,7 @@ const Npcs = {
         </div>
         <label>Titles (one per line)</label>
         <textarea id="nf-titles" rows="2">${esc((n.titles || []).join("\n"))}</textarea>
+        ${this.placeRow(n)}
         <label>Portrait gif URL ${n.local_image ? `<span class="muted">(currently local file: ${esc(n.local_image)} — a URL here overrides it)</span>` : ""}</label>
         <input type="text" id="nf-gif" value="${esc(n.gif)}">
         <label>Scene note (steers every reply until cleared — /npc note)</label>
@@ -2506,7 +3145,21 @@ const Npcs = {
         <div class="grid2">
           <div><label>Tier</label><input type="text" id="nf-tier" value="${esc(c.tier || "")}"
                placeholder="civilian / fighter / boss…"></div>
-          <div><label>HP</label><input type="number" id="nf-hp" value="${c.hp ?? ""}"></div>
+          <!-- B6d/B6c: this input has always written combat.hp, which seating
+               reads as BOTH current and max, so every hand-heal here
+               permanently rewrote the sheet. It is the MAX now and says so;
+               the wound is the separate control below. -->
+          <div><label>Max HP <span class="muted">(the sheet)</span></label>
+               <input type="number" id="nf-hp" value="${c.hp ?? ""}"></div>
+        </div>
+        <label>Current HP <span class="muted">(the wound — saved on its own,
+          not with the sheet)</span></label>
+        <div class="btnrow" style="margin-top:0">
+          <input type="number" id="nf-hpnow" style="flex:1;min-width:0"
+                 value="${c.hp_now ?? (c.hp ?? "")}"
+                 placeholder="${c.hp ?? "no max on this sheet"}">
+          <button class="btn" id="nf-hpset">Set</button>
+          <button class="btn" id="nf-hpfull">Full</button>
         </div>
         <label>Threat (how they fight)</label>
         <textarea id="nf-threat" rows="3">${esc(c.threat || "")}</textarea>
@@ -2527,6 +3180,14 @@ const Npcs = {
           <button class="btn" id="nf-membtn">Remember</button>
         </div>
       </div>`;
+    this.wirePlaceRow(n);
+    const hp = (body) => api("/api/dash/hp",
+        { kind: "npc", id: n.key, ...body,
+          author: localStorage.getItem("ht_author") || "" })
+      .then(j => { toast(`${n.name}: ${j.hp}/${j.max}`); this.load(); })
+      .catch(e => toast(e.message, true));
+    $("#nf-hpset").onclick = () => hp({ hp: Number($("#nf-hpnow").value || 0) });
+    $("#nf-hpfull").onclick = () => hp({ full: true });
     const mems = $("#nf-mems");
     mems.innerHTML = n.memories.length ? "" : "<p class='muted'>none</p>";
     n.memories.forEach((m, i) => {
@@ -3008,8 +3669,10 @@ const Lines = {
       if (q && !hay.toLowerCase().includes(q)) continue;
       const row = document.createElement("div");
       row.className = "lrow" + (this.sel === b ? " sel" : "");
-      row.innerHTML = `<span class="nm">${esc(this.label(b))}</span>
-        <span class="sub">${open ? "🔗 " + esc(open.name || "open") : "no open line"}
+      row.innerHTML = `<span class="nm">${esc(this.label(b))}${info.orphan
+          ? ' <span class="badge off">closed</span>' : ""}</span>
+        <span class="sub">${info.orphan ? "archived"
+          : open ? "🔗 " + esc(open.name || "open") : "no open line"}
           · cast ${info.cast.filter(c => c.live).length}
           · ${info.transcript_len} lines</span>`;
       row.onclick = () => { this.sel = b; this.renderList(); this.renderEditor(); };
@@ -3022,6 +3685,14 @@ const Lines = {
     const box = $("#lnedit");
     const b = this.sel, info = b && this.data.buckets[b];
     if (!info) { box.innerHTML = "<p class='muted'>Select a line.</p>"; return; }
+    /* B6 — an ORPHAN bucket is read-only. Its line is closed, so it no longer
+       resolves back to itself; the server used to walk its numeric tail
+       forward to whatever line that guild owns NOW, which meant Clear
+       transcript and Load scene on this dead row hit the running scene. The
+       server refuses it outright now, and the controls say so rather than
+       offering a button that can only fail. */
+    const ro = !!info.orphan;
+    const off = ro ? " disabled" : "";
     const gid = b.split(":")[1] || "";
     const open = this.data.lines[gid];
     const npcs = Object.entries(this.data.npcs)
@@ -3036,9 +3707,9 @@ const Lines = {
       .sort((a, c) => a[0].localeCompare(c[0])).map(([n, len]) => `
       <tr><td>${esc(n)}</td><td class="muted">${len}</td>
         <td style="white-space:nowrap">
-          <a href="#" data-sview="${esc(n)}">view</a> ·
+          <a href="#" data-sview="${esc(n)}">view</a>${ro ? "" : ` ·
           <a href="#" data-sload="${esc(n)}">load</a> ·
-          <a href="#" data-sdel="${esc(n)}">delete</a></td></tr>`).join("");
+          <a href="#" data-sdel="${esc(n)}">delete</a>`}</td></tr>`).join("");
     const ledger = (this.arch && this.arch.archives[gid]) || [];
     const ledgerRows = ledger.slice().reverse().map(e => `
       <tr><td class="muted" style="font-size:11px">${
@@ -3047,15 +3718,43 @@ const Lines = {
       .join("");
     box.innerHTML = `
       <h2>${esc(this.label(b))} <span class="muted" style="font-size:12px">·
-        ${open ? "line “" + esc(open.name || "") + "” open" : "no open line"}
+        ${ro ? "closed line — read only"
+             : open ? "line “" + esc(open.name || "") + "” open" : "no open line"}
         · gen ${info.gen} · <code>${esc(b)}</code></span></h2>
+      ${ro ? `<p class="hint" style="border:1px solid var(--line2);
+        border-radius:9px;padding:9px 11px;margin-bottom:10px">
+        This line is closed. Its transcript is kept as history and can be read,
+        but nothing here can be edited — an edit would land on whatever line
+        ${esc(this.data.teams[gid] || "this server")} has open now.</p>` : ""}
       <div class="frm">
+        ${open ? `
+        <h2>Line mode</h2>
+        <p class="hint" style="margin-bottom:6px">A fight can start on a
+        <b>physical</b> line and never on a <b>remote</b> one — a conch call, a
+        beacon, the Bar from Nowhere. This is the one gate on combat, and it is
+        the whole setup: the place comes from where the party is standing, so
+        nothing else has to be set. An unset line reads as remote.</p>
+        <p class="hint" style="margin-bottom:6px"><b>Physical does not mean a
+        fight is running.</b> An encounter is a fight — it starts when somebody
+        plays a hostile card or a dev runs <code>/combat start</code>, it says
+        so out loud when it does, and it ends when the fight ends. On a remote
+        line a hostile card is <b>refused</b> and nothing is consumed.</p>
+        <p class="hint" style="margin-bottom:6px"><b>Every line that existed on
+        2026-08-11 was set to remote</b>, which means no fight can start on any
+        of them until someone turns a line physical here. That is deliberate —
+        no combat is the safe direction, rather than a fight breaking out in a
+        conch call.</p>
+        <div class="seg" id="ln-mode">
+          <button data-mode="physical"${open.mode === "physical" ? ' class="on"' : ""}>Physical</button>
+          <button data-mode="remote"${open.mode !== "physical" ? ' class="on"' : ""}>Remote</button>
+        </div>
+        <hr>` : ""}
         <h2>Cast</h2>
         <div id="ln-cast">${castChips}</div>
         <div style="display:flex;gap:7px;margin-top:7px">
-          <select id="ln-addnpc" style="flex:1">${npcs.map(([k, n]) =>
+          <select id="ln-addnpc" style="flex:1"${off}>${npcs.map(([k, n]) =>
             `<option value="${k}">${esc(n)}</option>`).join("")}</select>
-          <button class="btn mini" id="ln-adds">＋ Stage on this line</button>
+          <button class="btn mini" id="ln-adds"${off}>＋ Stage on this line</button>
         </div>
         <hr>
         <h2>Transcript <span class="muted">— what the NPCs read (${info.transcript_len} lines${info.tail.length < info.transcript_len ? ", last " + info.tail.length + " shown" : ""})</span></h2>
@@ -3064,19 +3763,21 @@ const Lines = {
           <tr><td class="muted" style="width:34px">${start + i}</td>
             <td style="width:110px">${esc(e2.speaker)}</td>
             <td>${esc(e2.text)}</td>
-            <td style="white-space:nowrap"><a href="#" data-tedit="${start + i}">✏</a>
-              <a href="#" data-tdel="${start + i}">✕</a></td></tr>`).join("")}
+            <td style="white-space:nowrap">${ro ? "" :
+              `<a href="#" data-tedit="${start + i}">✏</a>
+              <a href="#" data-tdel="${start + i}">✕</a>`}</td></tr>`).join("")}
         </table></div>
         <div class="btnrow">
-          <button class="btn danger mini" id="ln-clear">Clear transcript…</button>
+          <button class="btn danger mini" id="ln-clear"${off}>Clear transcript…</button>
         </div>
         <hr>
         <h2>Scenes <span class="muted">— snapshots; load REPLACES the running transcript</span></h2>
         <div style="display:flex;gap:7px;margin-bottom:7px">
-          <input type="text" id="ln-scenename" placeholder="snapshot name" style="flex:1">
-          <button class="btn mini" id="ln-ssave">📸 Save current as scene</button>
+          <input type="text" id="ln-scenename" placeholder="snapshot name" style="flex:1"${off}>
+          <button class="btn mini" id="ln-ssave"${off}>📸 Save current as scene</button>
         </div>
-        <div style="max-height:220px;overflow:auto"><table class="tbl">${sceneRows}</table></div>
+        <div style="max-height:220px;overflow:auto">
+          <table class="tbl">${sceneRows}</table></div>
         <pre id="ln-sceneview" class="muted"
              style="display:none;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
         <hr>
@@ -3098,6 +3799,21 @@ const Lines = {
     $("#ln-adds").onclick = () =>
       call("/api/dash/line-cast", { action: "add", npc: $("#ln-addnpc").value },
            "Staged");
+    // B6b — the mode control keys on the LINE id, not the bucket, because the
+    // flag lives on the lines{} record: the only per-line store that survives
+    // a close.
+    const modebar = $("#ln-mode");
+    if (modebar) modebar.querySelectorAll("button").forEach(btn =>
+      btn.onclick = () => {
+        if (btn.classList.contains("on")) return;
+        api("/api/dash/line-mode", { line: open.id, mode: btn.dataset.mode,
+                                     author: this.author() })
+          .then(j => { toast(`Line is now ${j.mode}`
+                             + (j.mode === "physical"
+                                ? " — combat is live here" : ""));
+                       this.load(); })
+          .catch(e2 => toast(e2.message, true));
+      });
     box.querySelectorAll("[data-tdel]").forEach(a => a.onclick = ev => {
       ev.preventDefault();
       const i = +a.dataset.tdel;
@@ -3529,9 +4245,9 @@ const Sites = {
                     title="generate a long random one">🎲</button>
           </div></td></tr>`).join("");
     box.innerHTML = `
-      <div class="frm"><table class="tbl">
+      <div class="frm"><div class="tblwrap"><table class="tbl">
         <thead><tr><th>Team / site</th><th>Passcode</th><th>Change it</th></tr></thead>
-        <tbody>${rows}</tbody></table>
+        <tbody>${rows}</tbody></table></div>
       <p class="hint">🎲 generates a long random passcode. Custom codes are
       case-insensitive and ignore spaces at the gate.</p></div>`;
     box.querySelectorAll("[data-strev]").forEach(a => a.onclick = ev => {
@@ -4081,8 +4797,21 @@ const Overview = {
 const Bases = {
   data: null, sel: null, creating: false, details: false,
   arrange: false, selHale: null, newHale: false, selNpc: null,
-  benchQ: "", view: { k: 1, tx: 0, ty: 0 },
-  _drag: null, _blobs: {}, _sig: "",
+  benchQ: "", benchAll: false, view: { k: 1, tx: 0, ty: 0 },
+  _drag: null, _dragCancel: null, _blobs: {}, _sig: "",
+  /* Does this NPC belong to the team holding this base?
+     Both sides are NAMES, not guild ids, because a base's holder is free text
+     — an NPC faction can hold one — and `card.team` is resolved server-side
+     from forge.team first and affiliation second.
+     A blank affiliation matches NOTHING. That is deliberate: an unaffiliated
+     NPC belongs to nobody rather than to everybody, and the show-the-whole-
+     island toggle is how you station one. A base with no holder scopes to
+     nothing, so it shows the island. */
+  ownsNpc(c, teamName) {
+    const t = String(teamName || "").trim().toLowerCase();
+    if (!t) return true;
+    return String(c.team || "").trim().toLowerCase() === t;
+  },
   async load() {
     try { this.data = await api(islq("/api/dash/bases")); }
     catch (e) { return; }
@@ -4239,8 +4968,19 @@ const Bases = {
       });
     }
     const stationed = this.stationedKeys(b);
-    const bench = Object.values(this.data.npcs || {})
-      .filter(c => !stationed.has(c.key))
+    /* B5 — this bench was filtered by ISLAND, not by team or base, so every
+       unstationed NPC on the island drew as one of THIS base's off-duty chips
+       and was offered in its station-an-NPC dropdown. Live that was 129 cards
+       against 52 stationed: 77 strangers under one heading, which is exactly
+       what makes Final Measure look like it has everyone on its roster.
+       Scoped to the base's holder now, with a toggle back to the whole island
+       because that is how an NPC with no affiliation gets stationed at all. */
+    const offDuty = Object.values(this.data.npcs || {})
+      .filter(c => !stationed.has(c.key));
+    const mine = offDuty.filter(c => this.ownsNpc(c, b.team));
+    const pool = this.benchAll ? offDuty : mine;
+    const hidden = offDuty.length - mine.length;
+    const bench = pool
       .filter(c => !this.benchQ ||
         (c.name + " " + (c.affiliation || "")).toLowerCase()
           .includes(this.benchQ))
@@ -4273,15 +5013,23 @@ const Bases = {
         the same from their team site, live.</p>
       </div>
       <div class="bcols">
-        <div class="card"><h2>Off duty — station them</h2>
+        <div class="card"><h2>Off duty${b.team && !this.benchAll
+            ? " — " + esc(b.team) : ""} — station them</h2>
           <input class="search" id="bm-benchq" type="text"
                  placeholder="Search the cast…" value="${esc(this.benchQ)}">
           <div class="benchchips" id="bm-bench">${bench.slice(0, 60).map(c =>
             `<span class="chip" data-npc="${esc(c.key)}">${esc(c.name)}</span>`).join(" ")
-            || "<span class='muted'>Everyone alive is stationed here.</span>"}</div>
+            || (this.benchAll
+                ? "<span class='muted'>Everyone alive is stationed here.</span>"
+                : "<span class='muted'>Nobody unstationed belongs to "
+                  + esc(b.team || "this base") + ".</span>")}</div>
           <p class="hint" style="margin-top:6px">Drag a name onto a hale (or
           click it, then pick a hale). ${bench.length > 60
             ? bench.length - 60 + " more match — narrow the search." : ""}</p>
+          ${hidden ? `<button class="btn mini" id="bm-benchall"
+            style="margin-top:6px">${this.benchAll
+              ? "Show only " + esc(b.team || "this base's cast")
+              : "Show the whole island (" + hidden + " more)"}</button>` : ""}
         </div>
         <div id="bm-panel"></div>
       </div>`;
@@ -4308,14 +5056,21 @@ const Bases = {
       this.applyBView();
     };
     let pan = null;
+    // Pinch zoom, same helper the island map uses. wireMap re-runs on every
+    // repaint against a freshly built #bmapwrap, so this attaches to the new
+    // element each time and the old one is discarded with its listeners.
+    const pinch = addPinchZoom(wrap, () => this.view, () => this.applyBView(),
+                               () => { pan = null; this.cancelBaseDrag(); });
+    this.pinch = pinch;
     wrap.onpointerdown = e => {
+      if (pinch.active()) return;
       if (!e.target.classList.contains("bplan") &&
           !e.target.classList.contains("bground") &&
           e.target.id !== "boverlay") return;
       pan = { x: e.clientX, y: e.clientY };
     };
     wrap.onpointermove = e => {
-      if (!pan) return;
+      if (!pan || pinch.active()) return;
       this.view.tx += e.clientX - pan.x;
       this.view.ty += e.clientY - pan.y;
       pan = { x: e.clientX, y: e.clientY };
@@ -4341,6 +5096,9 @@ const Bases = {
     });
     // Bench chips: click opens the card; drag onto a hale stations them.
     $("#bm-benchq").oninput = e => { this.benchQ = e.target.value.trim().toLowerCase();
+                                     this.renderView(); };
+    const ball = $("#bm-benchall");
+    if (ball) ball.onclick = () => { this.benchAll = !this.benchAll;
                                      this.renderView(); };
     $("#bm-bench").querySelectorAll(".chip").forEach(ch => {
       ch.onpointerdown = e => this.startNpcDrag(e, ch, cv, view, true);
@@ -4382,11 +5140,22 @@ const Bases = {
       } catch (err) { toast(err.message, true); }
     };
   },
+  /* Drop whatever one-finger drag is in flight, without saving it. Called
+     when a pinch starts: a hale or NPC drag ends in a write, so letting one
+     run alongside a zoom would re-station somebody by accident. */
+  cancelBaseDrag() {
+    if (this._dragCancel) this._dragCancel();
+    this._dragCancel = null;
+    if (!this._drag) return;
+    this._drag = null;
+    this.renderView();
+  },
   startHaleDrag(e, el, cv) {
     e.preventDefault();
     e.stopPropagation();
     this._drag = true;
     const dot = el.querySelector(".hbox");
+    this._dragCancel = () => { dot.onpointermove = dot.onpointerup = null; };
     dot.setPointerCapture(e.pointerId);
     let xy = null;
     const pctX = v => (v / cv.w * 100) + "%", pctY = v => (v / cv.h * 100) + "%";
@@ -4398,6 +5167,7 @@ const Bases = {
     dot.onpointerup = () => {
       dot.onpointermove = dot.onpointerup = null;
       this._drag = null;
+      this._dragCancel = null;
       if (!xy) return;
       api("/api/dash/base-house-coord", {
         base: this.sel, house: el.dataset.hale,
@@ -4411,6 +5181,12 @@ const Bases = {
     e.preventDefault();
     const key = el.dataset.npc;
     let moved = false;
+    this._dragCancel = () => {
+      el.onpointermove = el.onpointerup = null;
+      el.classList.remove("dragging");
+      document.querySelectorAll(".bhale").forEach(pe =>
+        pe.classList.remove("droptarget"));
+    };
     el.setPointerCapture(e.pointerId);
     const pctX = v => (v / cv.w * 100) + "%", pctY = v => (v / cv.h * 100) + "%";
     el.onpointermove = ev => {
@@ -4434,6 +5210,7 @@ const Bases = {
         pe.classList.remove("droptarget"));
       const wasDrag = this._drag;
       this._drag = null;
+      this._dragCancel = null;
       if (!moved || !wasDrag) {
         // A plain click: open the card.
         this.selNpc = this.selNpc === key ? null : key;
@@ -4488,9 +5265,18 @@ const Bases = {
   renderHalePanel(box, b, view) {
     const h = (b.houses || []).find(x => x.name === this.selHale);
     if (!h) { this.selHale = null; this.renderPanel(b, view); return; }
-    const roster = Object.values(this.data.npcs || {})
+    /* Same scoping as the bench (B5): this dropdown offered every NPC on the
+       island, so stationing someone into a hale meant picking their name out
+       of a list of strangers. Grouped rather than filtered, because the toggle
+       lives on the bench card and this panel replaces it — the second group is
+       always reachable, just not first. */
+    const all = Object.values(this.data.npcs || {})
       .sort((a, c) => a.name.localeCompare(c.name));
+    const roster = all.filter(c => this.ownsNpc(c, b.team));
+    const others = all.filter(c => !this.ownsNpc(c, b.team));
     const stationed = this.stationedKeys(b);
+    const opt = c => `<option value="${esc(c.key)}">${esc(c.name)}`
+      + `${stationed.has(c.key) ? " (moves them)" : ""}</option>`;
     box.innerHTML = `<div class="card"><h2>Hale — ${esc(h.name)}</h2><div class="frm">
       <label>Name</label><input type="text" id="hp-nm" value="${esc(h.name)}">
       <label>Function — the post this house works</label>
@@ -4503,7 +5289,10 @@ const Bases = {
         || "<span class='muted'>No roster NPCs stationed.</span>"}</div>
       <select id="hp-add" style="width:100%;margin-top:7px">
         <option value="">— station an NPC here… —</option>
-        ${roster.map(c => `<option value="${esc(c.key)}">${esc(c.name)}${stationed.has(c.key) ? " (moves them)" : ""}</option>`).join("")}
+        ${roster.length ? `<optgroup label="${esc(b.team || "This base")}">`
+          + roster.map(opt).join("") + "</optgroup>" : ""}
+        ${others.length ? `<optgroup label="Elsewhere on the island">`
+          + others.map(opt).join("") + "</optgroup>" : ""}
       </select>
       <div class="btnrow">
         <button class="btn primary" id="hp-save">Save hale</button>
