@@ -673,7 +673,7 @@
                       border: 0; border-radius: 9px; color: #fff;
                       font-weight: 700; cursor: pointer; font: inherit;
                       box-shadow: 0 4px 14px rgba(124,92,255,.3); }
-  /* Region card preview — shaped like the Discord embed /region posts, so what
+  /* Region card preview — shaped like the Discord embed /dev region posts, so what
      the dashboard shows is what the table will see. */
   .rprev { background: #2b2d31; border-left: 4px solid #5865f2; border-radius: 5px;
            padding: 14px 16px 16px; max-width: 520px; color: #dbdee1;
@@ -851,6 +851,7 @@
     <span class="tab" data-view="sites"><span class="ic">🔐</span><span class="lb">Sites</span></span>
     <span class="tab" data-view="regions"><span class="ic">🧭</span><span class="lb">Regions</span></span>
     <span class="tab" data-view="locations"><span class="ic">📍</span><span class="lb">Locations</span></span>
+    <span class="tab" data-view="drafts"><span class="ic">📗</span><span class="lb">Draft sheets<span id="draftcount" class="apvbadge" style="display:none">0</span></span></span>
   </nav>
   <div id="sidefoot">
     <span id="status">connecting…</span>
@@ -1073,6 +1074,26 @@
     __underline action__ standing there — devs still ✅ every word.</p>
   </div>
   <div class="editor card" id="ledit"><p class="muted">Select a place.</p></div>
+</section>
+
+<!-- K3, owner ruling 2026-08-14. The Discord surface (/dev sheets) rules
+     quickly; this one is for reading a sheet properly, which is why it shows
+     the lore WHOLE rather than in 1024-character embed fields. Both read
+     /api/dash/draft-sheets, which serves draft_sheet_queue() verbatim — one
+     reader, so the two surfaces cannot disagree about what is outstanding or
+     in what order. Clearing happens in the Locations editor, which shares
+     apply_draft_flag with the bot, so there is one writer too. -->
+<section class="view" id="view-drafts">
+  <div class="card" style="grid-column:1/-1">
+    <h2>📗 Drafted location sheets
+      <span class="muted" id="drafthdr"></span></h2>
+    <p class="hint">A drafted sheet contributes only its LOCATION and ABOUT
+    lines, so it grounds nothing an NPC says there. Worst first: places with
+    players standing on them, then the longest unreviewed writing. Clearing a
+    sheet is the review — open it in <b>Locations</b>, untick <i>Draft</i>,
+    and save.</p>
+    <div id="draftlist" style="margin-top:10px"></div>
+  </div>
 </section>
 
 <section class="view" id="view-bases">
@@ -1366,6 +1387,49 @@ function openGate() {
   $("#tokenin").value = TOKEN;
   $("#tokengate").style.display = "flex";
 }
+// ---- K3: the drafted location sheets -------------------------------------
+// Read-only. Clearing goes through the Locations editor so the flag keeps ONE
+// writer; this view's job is to make a sheet readable in full and to say which
+// ones are costing something right now.
+async function loadDrafts() {
+  const box = $("#draftlist");
+  if (!box) return;
+  box.innerHTML = '<p class="muted">loading…</p>';
+  let j;
+  try { j = await api("/api/dash/draft-sheets"); }
+  catch (e) { box.innerHTML = '<p class="muted">could not load: ' + e + '</p>'; return; }
+  const badge = $("#draftcount");
+  if (badge) {
+    badge.textContent = j.total;
+    badge.style.display = j.total ? "" : "none";
+  }
+  const hdr = $("#drafthdr");
+  if (hdr) hdr.textContent = j.total
+    ? "— " + j.total + " outstanding" +
+      (j.with_players_standing ? ", " + j.with_players_standing +
+       " with players standing on them" : "")
+    : "— none, every sheet grounds narration";
+  if (!j.total) { box.innerHTML = '<p class="muted">Nothing to review.</p>'; return; }
+  box.innerHTML = j.sheets.map(r => {
+    const warn = r.standing
+      ? '<b style="color:var(--warn,#e0a33e)">⚠️ ' + r.standing +
+        ' player(s) standing here now</b> · ' : '';
+    const off = r.on_map ? '' : ' · <b>not on the map</b>';
+    const inter = (r.interactables || []).map(i =>
+      '<li><b>' + esc(i.name || '') + '</b> — ' + esc(i.desc || '') + '</li>'
+    ).join('');
+    return '<details class="card" style="margin-bottom:8px">' +
+      '<summary><b>' + esc(r.name) + '</b> <span class="muted">' + warn +
+      (r.lore || '').length + ' chars · updated ' + esc(r.updated || '?') +
+      off + '</span></summary>' +
+      '<p class="hint">' + esc(r.about || '(no ABOUT line)') + '</p>' +
+      '<pre style="white-space:pre-wrap">' + esc(r.lore || '(empty)') + '</pre>' +
+      (inter ? '<ul>' + inter + '</ul>' : '') +
+      '<p class="hint">Open <b>' + esc(r.name) + '</b> in Locations to clear it.</p>' +
+      '</details>';
+  }).join("");
+}
+
 async function api(path, body) {
   const r = await fetch(API + path, {
     method: body ? "POST" : "GET",
@@ -1710,6 +1774,7 @@ function switchView(v) {
     skills: ["Skill tree", "five trees, fourteen branches"],
     sites: ["Team sites", ""], regions: ["Regions", ""],
     locations: ["Locations", ""],
+    drafts: ["Draft sheets", "unreviewed, so they ground nothing"],
     bases: ["Bases", "live interior maps"],
   };
   const [ttl, sub] = meta[v] || [v, ""];
@@ -1717,6 +1782,7 @@ function switchView(v) {
   $("#pagesub").textContent = sub ? " — " + sub : "";
   paintScope();
   if (v === "overview") Overview.load();
+  if (v === "drafts") loadDrafts();
   if (v === "approvals") Approvals.load();
   if (v === "map") refresh();
   if (v === "players") Players.load();
@@ -2831,7 +2897,7 @@ const Players = {
   renderCreate(box) {
     box.innerHTML = `
       <h2>New player</h2>
-      <p class="hint">Mirrors /register-player — the member's Discord ID plus
+      <p class="hint">Mirrors /player register — the member's Discord ID plus
       card basics. They can be placed on the map afterwards.</p>
       <div class="frm">
         <div class="grid2">
@@ -4280,7 +4346,7 @@ const Sites = {
 };
 
 /* ================= REGION DISPLAYS ================= */
-/* The standing card for a place — what /region posts to a line. Fields are a
+/* The standing card for a place — what /dev region posts to a line. Fields are a
    REPEATABLE label/value list (item 7): the bot seeds the classic five on
    old records and hands them back normalized, so the editor, the preview and
    the embed can never drift apart. Capped at Discord's 25-field embed limit
@@ -4426,7 +4492,7 @@ const Regions = {
                           : '<button class="btn danger" id="rf-del">Delete…</button>'}
         </div>
         <hr>
-        <h2>Preview <span class="muted">— what <code>/region</code> posts</span></h2>
+        <h2>Preview <span class="muted">— what <code>/dev region</code> posts</span></h2>
         <div id="rf-preview" style="margin-top:8px"></div>
       </div>`;
     // Live preview: every input repaints as it's typed; field rows also sync
