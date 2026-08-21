@@ -841,6 +841,7 @@
     <span class="tab" data-view="map"><span class="ic">🗺</span><span class="lb">Map</span></span>
     <span class="tab" data-view="bases"><span class="ic">🏠</span><span class="lb">Bases</span></span>
     <span class="tab" data-view="players"><span class="ic">👥</span><span class="lb">Players</span></span>
+    <span class="tab" data-view="spectators"><span class="ic">🎟</span><span class="lb">Spectators<span id="specwarn" class="apvbadge" style="display:none">0</span></span></span>
     <span class="tab" data-view="npcs"><span class="ic">🎭</span><span class="lb">NPCs</span></span>
     <span class="tab" data-view="items"><span class="ic">🎒</span><span class="lb">Items</span></span>
     <span class="tab" data-view="skills"><span class="ic">🌳</span><span class="lb">Skill tree</span></span>
@@ -941,6 +942,27 @@
     <div id="plist" style="margin-top:8px"></div>
   </div>
   <div class="editor card" id="pedit"><p class="muted">Select a player.</p></div>
+</section>
+
+<!-- U6: the roster, the AUTHORITY, and the drift between them.
+     The Discord role decides who is a spectator (owner ruling 1, 2026-08-20);
+     the spectators record is downstream of it. So this view never shows the
+     rows alone - it shows what Discord says beside them, and says loudly when
+     it cannot see all of Discord. -->
+<section class="view" id="view-spectators">
+  <div class="card" style="grid-column:1/-1">
+    <h2>🎟 Spectators <span class="muted" id="spechdr"></span></h2>
+    <p class="hint">Owner ruling, 2026-08-20: <b>anyone holding a Spectator
+    role is a spectator</b>, and <b>a spectator is only a spectator, never a
+    player</b>. The role is the authority; the rows below are the roster kept
+    downstream of it. Registering someone who already holds the role is
+    bookkeeping. Clearing a team is not - it takes them out of play, keeps the
+    player record, and is reversible from the Players tab.</p>
+    <div id="speccaveat"></div>
+    <div id="specconflict"></div>
+    <div id="specrows" style="margin-top:10px"></div>
+    <div id="specunreg" style="margin-top:14px"></div>
+  </div>
 </section>
 
 <section class="view" id="view-npcs">
@@ -1430,6 +1452,101 @@ async function loadDrafts() {
   }).join("");
 }
 
+// ---- U6: spectators ------------------------------------------------------
+// Three lists and a caveat. The caveat is not decoration: the bot runs without
+// the privileged members intent, so the role-holder enumeration sees only
+// cached members. When `roles_complete` is false the server sends `stale`
+// EMPTY rather than guessed, and this view says why - a "not a spectator any
+// more" list built from a membership list with holes in it is the one output
+// here that could destroy a real row.
+async function loadSpectators() {
+  const box = $("#specrows");
+  if (!box) return;
+  box.innerHTML = '<p class="muted">loading…</p>';
+  let j;
+  try { j = await api("/api/dash/spectators"); }
+  catch (e) { box.innerHTML = '<p class="muted">could not load: ' + e + '</p>'; return; }
+
+  const hdr = $("#spechdr");
+  if (hdr) hdr.textContent = "— " + j.rows.length + " registered, " +
+    j.role_holders.length + " holding the role";
+
+  const cav = $("#speccaveat");
+  if (cav) cav.innerHTML = j.roles_complete ? "" :
+    '<p class="hint" style="color:var(--warn,#e0a33e)">⚠️ <b>Partial view of ' +
+    'Discord.</b> The bot runs without the members intent, so only members it ' +
+    'has already seen are counted. Someone missing from “holds the role, not ' +
+    'registered” may simply not be cached — register from the role list in ' +
+    'Discord, not from an absence here. Stale-row detection is switched off ' +
+    'for the same reason.</p>';
+
+  // A row on a teamed player is a DATA ERROR under ruling 2, not a state.
+  const conf = $("#specconflict");
+  const badge = $("#specwarn");
+  if (badge) {
+    badge.textContent = j.conflicted.length;
+    badge.style.display = j.conflicted.length ? "" : "none";
+  }
+  if (conf) conf.innerHTML = !j.conflicted.length ? "" :
+    '<p class="hint" style="color:var(--bad,#e06c6c)"><b>' +
+    j.conflicted.length + ' row(s) on a player who still holds a team.</b> ' +
+    'A spectator is only a spectator, so this is bad data rather than a state ' +
+    'to leave alone. Clear the row, or clear the team.</p>';
+
+  box.innerHTML = '<h3 class="muted">Registered</h3>' + (!j.rows.length
+    ? '<p class="muted">No rows.</p>'
+    : j.rows.map(r => {
+        const flags = [];
+        if (r.team) flags.push('<b style="color:var(--bad,#e06c6c)">on a team</b>');
+        if (!r.has_role && j.roles_complete) flags.push('<b>no Spectator role</b>');
+        if (!r.has_player) flags.push('<span class="muted">no player record</span>');
+        if (!r.is_spectator) flags.push('<b>NOT treated as a spectator by the game</b>');
+        return '<div class="card" style="margin-bottom:6px;padding:8px">' +
+          '<b>' + esc(r.name) + '</b> <span class="muted">' + esc(r.uid) + '</span>' +
+          (flags.length ? ' · ' + flags.join(' · ') : '') +
+          ' <button class="btn mini" data-specrm="' + esc(r.uid) + '">remove row</button>' +
+          '</div>';
+      }).join(""));
+
+  const un = $("#specunreg");
+  if (un) un.innerHTML = '<h3 class="muted">Holds the role, not registered</h3>' +
+    (!j.unregistered.length
+      ? '<p class="muted">None' + (j.roles_complete ? '' : ' visible') + '.</p>'
+      : j.unregistered.map(h =>
+          '<div class="card" style="margin-bottom:6px;padding:8px">' +
+          '<b>' + esc(h.name) + '</b> <span class="muted">' + esc(h.uid) + ' · ' +
+          esc((h.guilds || []).join(", ")) + '</span> ' +
+          '<button class="btn mini" data-specadd="' + esc(h.uid) + '" ' +
+          'data-specname="' + esc(h.name) + '">register</button></div>').join(""));
+
+  box.querySelectorAll("[data-specrm]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove the spectator row for " + b.dataset.specrm + "?")) return;
+    try { await api("/api/dash/spectator", { uid: b.dataset.specrm, remove: true }); }
+    catch (e) { alert(e); return; }
+    loadSpectators();
+  });
+  un.querySelectorAll("[data-specadd]").forEach(b => b.onclick = async () => {
+    try {
+      await api("/api/dash/spectator",
+                { uid: b.dataset.specadd, name: b.dataset.specname });
+    } catch (e) {
+      // The refusal we expect is ruling 2: they still hold a team. Offer the
+      // conversion explicitly rather than silently doing it - taking someone
+      // off a team is the one action here a dev must mean.
+      if (String(e).indexOf("clear_team") < 0) { alert(e); return; }
+      if (!confirm(b.dataset.specname + " is still on a team.\n\nRegister " +
+                   "them as a spectator AND take them off it? The player " +
+                   "record is kept and this is reversible.")) return;
+      try {
+        await api("/api/dash/spectator",
+                  { uid: b.dataset.specadd, name: b.dataset.specname,
+                    clear_team: true });
+      } catch (e2) { alert(e2); return; }
+    }
+    loadSpectators();
+  });
+}
+
 async function api(path, body) {
   const r = await fetch(API + path, {
     method: body ? "POST" : "GET",
@@ -1769,6 +1886,7 @@ function switchView(v) {
     approvals: ["Approvals", "everything waiting on a dev"],
     map: ["Map", "live team positions"],
     players: ["Players", ""], npcs: ["NPCs", ""], items: ["Items", ""],
+    spectators: ["Spectators", "the role is the authority"],
     quests: ["Questlines", ""], lines: ["Lines", "live state"],
     events: ["Road events", ""], shops: ["Shops", ""],
     skills: ["Skill tree", "five trees, fourteen branches"],
@@ -1786,6 +1904,7 @@ function switchView(v) {
   if (v === "approvals") Approvals.load();
   if (v === "map") refresh();
   if (v === "players") Players.load();
+  if (v === "spectators") loadSpectators();
   if (v === "npcs") Npcs.load();
   if (v === "items") Items.load();
   if (v === "quests") Quests.load();
@@ -2597,7 +2716,32 @@ const Players = {
           <div><label>Team</label><select id="pf-team">${teamOpts.join("")}</select></div>
           <div><label>Card color (#RRGGBB, blank = green)</label>
                <input type="text" id="pf-color" value="${esc(p.color || "")}"></div>
-          <div><label>HP bonus</label><input type="number" id="pf-hp" value="${p.hp_bonus}"></div>
+          <div><label>Max HP</label><input type="number" id="pf-hpmax" min="1"
+               value="${p.hp_max === undefined ? "" : p.hp_max}"></div>
+          <div><label>HP bonus${p.hp_max_stored ? " (inert)" : ""}</label>
+               <input type="number" id="pf-hp" value="${p.hp_bonus}"></div>
+          ${/* UNDEFINED IS A THIRD STATE AND MUST NOT COLLAPSE INTO "not pinned".
+                This page is FileResponse'd off disk, so the HTML half of a change
+                is live the moment it is written while the payload half waits for a
+                restart. For that window `hp_max_stored` is ABSENT, and absent is
+                falsy — so a two-branch ternary renders "derived: 150 + bonus" for
+                everybody, which is false for 28 of 31 live players and is the exact
+                claim this control exists to kill. Saying nothing is honest; saying
+                the wrong thing in a styled hint is worse than the silence this
+                replaced. */
+            p.hp_max_stored === undefined
+            ? `<p class="hint" style="grid-column:1/-1;margin:0">Max HP is not in this
+               payload yet — the bot is running code older than this control. The
+               field above is blank and will stay blank until it restarts. Typing a
+               number still works.</p>`
+            : p.hp_max_stored
+              ? `<p class="hint" style="grid-column:1/-1;margin:0">Max HP is pinned at
+                 ${p.hp_max_stored}, so HP bonus is ignored for this player. Edit Max
+                 HP instead — the bonus only applies to someone who has never been
+                 seated in a fight.</p>`
+              : `<p class="hint" style="grid-column:1/-1;margin:0">Max HP is derived:
+                 150 + bonus. Typing a Max HP here pins it, and the bonus stops
+                 counting.</p>`}
           <div><label style="margin-top:14px"><input type="checkbox" id="pf-hollow"
                ${p.hollow ? "checked" : ""}> Hollow side</label></div>
         </div>
@@ -2757,6 +2901,13 @@ const Players = {
         hollow: $("#pf-hollow").checked,
         titles: $("#pf-titles").value.split("\n").map(s => s.trim()).filter(Boolean),
       };
+      // ONLY WHEN THE DEV ACTUALLY MOVED IT. Sending hp_max unconditionally
+      // would pin a derived max on every save of any other field — rename a
+      // player who has never fought and their 150+bonus would silently become
+      // a hard 150, and their bonus would stop counting for ever after. The
+      // field is loaded with the effective max, so equality means untouched.
+      const hpMax = parseInt($("#pf-hpmax").value || "0", 10);
+      if (hpMax > 0 && hpMax !== p.hp_max) body.hp_max = hpMax;
       api("/api/dash/player", body)
         .then(r => { toast(r.changed.length ? "Saved: " + r.changed.join(", ")
                                             : "No changes"); Players.load(); })
@@ -3245,6 +3396,14 @@ const Npcs = {
           <input type="text" id="nf-addmem" placeholder="First person, e.g. 'PK kept the lantern lit'" style="flex:1">
           <button class="btn" id="nf-membtn">Remember</button>
         </div>
+        <hr>
+        <h2>Between lines (${n.journal.length}${n.journal_dropped ? ` · ${n.journal_dropped} older dropped` : ""})</h2>
+        <p class="muted">What they did when nobody was in a scene with them. Written by the game and editable here; the newest few reach their prompt.</p>
+        <div id="nf-jrnl"></div>
+        <div class="btnrow" style="margin-top:6px">
+          <input type="text" id="nf-addjrnl" placeholder="e.g. 'mended the seine at the landing'" style="flex:1">
+          <button class="btn" id="nf-jrnlbtn">Note</button>
+        </div>
       </div>`;
     this.wirePlaceRow(n);
     const hp = (body) => api("/api/dash/hp",
@@ -3271,6 +3430,37 @@ const Npcs = {
       const text = $("#nf-addmem").value.trim();
       if (!text) return;
       api("/api/dash/npc-memory", { key: n.key, add: text })
+        .then(() => Npcs.load()).catch(e => toast(e.message, true));
+    };
+    // U4. Rows carry an EDIT as well as a forget, unlike memories: these are
+    // written by machinery, so the common dev action is fixing a line a
+    // producer phrased badly, and add-then-delete would lose when it happened.
+    const jrnl = $("#nf-jrnl");
+    jrnl.innerHTML = n.journal.length ? "" : "<p class='muted'>nothing recorded yet</p>";
+    n.journal.forEach((m, i) => {
+      const row = document.createElement("div");
+      row.className = "memrow";
+      const when = m.at ? new Date(m.at * 1000).toLocaleString() : "";
+      row.innerHTML = `<span class="t">${esc(m.text)}
+          <span class="muted">(${esc(when)}${m.source ? " · " + esc(m.source) : ""}${m.edited ? " · edited" : ""})</span></span>
+        <button class="btn mini">edit</button>
+        <button class="btn mini danger">forget</button>`;
+      const btns = row.querySelectorAll("button");
+      btns[0].onclick = () => {
+        const text = prompt("Reword this. When it happened is kept as it was.", m.text);
+        if (text === null || !text.trim()) return;
+        api("/api/dash/npc-journal", { key: n.key, edit: i, text })
+          .then(() => Npcs.load()).catch(e => toast(e.message, true));
+      };
+      btns[1].onclick = () =>
+        api("/api/dash/npc-journal", { key: n.key, forget: i })
+          .then(() => Npcs.load()).catch(e => toast(e.message, true));
+      jrnl.appendChild(row);
+    });
+    $("#nf-jrnlbtn").onclick = () => {
+      const text = $("#nf-addjrnl").value.trim();
+      if (!text) return;
+      api("/api/dash/npc-journal", { key: n.key, add: text })
         .then(() => Npcs.load()).catch(e => toast(e.message, true));
     };
     $("#nf-save").onclick = () => {
