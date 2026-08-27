@@ -1046,9 +1046,11 @@
     <select id="shteam" style="width:100%"></select>
     <div id="shmeta" class="hint" style="margin-top:6px"></div>
     <p class="hint" style="margin-top:8px">The stall players see at
-    <code>/vendor</code>. Prices are computed from team wealth at buy time —
-    only stock is edited here. Below: every open marketplace listing;
-    unlisting returns the goods to the seller's bag.</p>
+    <code>/vendor</code>. Prices are set from team wealth when the stall
+    restocks and hold until the next one — only stock is edited here, and a
+    dev retunes the price basis with <code>/vendor-admin price-wealth</code>.
+    Below: every open marketplace listing; unlisting returns the goods to the
+    seller's bag.</p>
   </div>
   <div class="editor card" id="shedit"><p class="muted">Loading…</p></div>
 </section>
@@ -4308,9 +4310,17 @@ const Shops = {
     const box = $("#shedit");
     if (!this.team) { box.innerHTML = "<p class='muted'>No teams.</p>"; return; }
     const v = this.data.vendors[this.team] || { stock: [], refreshed_at: 0 };
-    $("#shmeta").textContent = v.refreshed_at
+    // Name the price basis, not just the date. Since prices freeze at restock,
+    // "$X" alone reads as a bug to anyone comparing it against the team's
+    // current balance — the whole point is that the two have drifted apart.
+    const basis = { pinned: "pinned by a dev", restock: "locked at restock" }[v.price_basis]
+      || "live team wealth";
+    $("#shmeta").textContent = (v.refreshed_at
       ? "Last stocked " + new Date(v.refreshed_at * 1000).toLocaleString()
-      : "Never stocked — it rolls when a player first opens /vendor.";
+      : "Never stocked — it rolls when a player first opens /vendor.")
+      + (v.stock.length ? ` · priced against $${fmt(v.priced_at)} (${basis})`
+                        + (v.price_basis === "live" ? ""
+                           : `, team now worth $${fmt(v.team_wealth)}`) : "");
     const stockRows = v.stock.map(i => `
       <tr><td>${esc(i.name)}</td><td class="muted">${esc(i.rarity || "")}</td>
         <td style="width:74px"><input type="number" min="0" max="99"
@@ -5217,7 +5227,17 @@ const Bases = {
       (h.npcs || []).forEach((k, j) => {
         const c = this.card(k);
         if (!c) return;
-        const dx = h.x - 26 + (j % 3) * 26, dy = h.y + 34 + Math.floor(j / 3) * 26;
+        /* The 26/34 offsets were authored against the DEFAULT 1200x800
+           canvas and converted to a PERCENT of it, so they are only
+           correct at that size. An uploaded ground plan sets the canvas
+           to the image own pixel size -- Final Measure own plan is
+           2500x2500 -- which halved the spacing and piled 22px dots on
+           top of each other. Scale the step with the canvas so the
+           on-screen gap is what it was designed to be, whatever the
+           plan measures. Identical arithmetic at 1200x800. */
+        const gx = 26 * (cv.w / 1200), gy = 26 * (cv.h / 800);
+        const dx = h.x - gx + (j % 3) * gx,
+              dy = h.y + gy * (34 / 26) + Math.floor(j / 3) * gy;
         marks += `<div class="bnpc${this.selNpc === k ? " sel" : ""}" data-npc="${esc(k)}"
           data-hale="${esc(h.name)}" title="${esc(c.name)} — ${esc(h.name)}"
           style="left:${pct(dx, "x")};top:${pct(dy, "y")}">${esc(initials(c.name))}</div>`;
