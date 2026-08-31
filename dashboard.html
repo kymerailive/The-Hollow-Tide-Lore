@@ -3457,6 +3457,16 @@ const Npcs = {
         <textarea id="nf-contact" rows="2" maxlength="600"
           placeholder="Carry an invitation across the water">${esc(n.contact_live ? (n.contact || {}).text || "" : "")}</textarea>
         <p class="hint">${this.intentHint(n.contact, n.contact_live, "contact")}</p>
+        <label>Open threads — one per line, things this character has left
+          unfinished. They may raise one themselves; they may never invent
+          one</label>
+        <textarea id="nf-threads" rows="3"
+          placeholder="Nobody has answered who minds the base's weekly upkeep&#10;Keanu carried a message the household was sent to hear">${esc((n.threads || []).join("\n"))}</textarea>
+        <p class="hint">The raw material for the line above. An hourly sweep
+        offers one to the queue as something to carry; you rule it, and only
+        then does the NPC hold it. Refuse one and it is not put to you again
+        for 30 days, and the next thread gets its turn. Players never read
+        these — unlike the task and routine, they are notes to the drafter.</p>
         <p class="hint">A goal changes how they answer; a carried line is the
         only thing that makes them speak FIRST. Neither posts anything — the
         words still come out of a draft you approve.</p>
@@ -3604,6 +3614,11 @@ const Npcs = {
         routine: $("#nf-routine").value.split("\n").map(s => s.trim()).filter(Boolean),
         goal: $("#nf-goal").value,
         contact: $("#nf-contact").value,
+        // `filter(Boolean)` the same way routine does, so an emptied box
+        // posts [] and the server pops the key. Anything less and clearing
+        // the last thread is impossible.
+        threads: $("#nf-threads").value.split("\n")
+          .map(s => s.trim()).filter(Boolean),
         combat: {
           tier: $("#nf-tier").value,
           hp: $("#nf-hp").value === "" ? null : parseInt($("#nf-hp").value, 10),
