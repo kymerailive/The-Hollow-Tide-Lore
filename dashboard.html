@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Item 107 (R39). Installable on a dev's home screen; no service
+     worker, because this tool's value is that its numbers are live and a
+     cached dashboard is worse than one that fails to load. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#11131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LNK Dev">
 <title>LNK Mini — Dev Dashboard</title>
 <style>
   :root {
@@ -695,6 +702,15 @@
   /* Wide content scrolls inside its own box; the page body never scrolls in x.
      Tables are the main offender — they were rendering entirely off-screen. */
   .tblwrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Item 106. A capped, inner-scrolling pane on a desktop; on a phone the
+     cap comes off and the PAGE scrolls, which is M8's stated pass condition.
+     Six of these were written as inline style attributes inside JS template
+     strings, where neither the audit's DOM measurement nor the invariant
+     test could reach them. */
+  .pane { overflow: auto; }
+  .pane.h320 { max-height: 320px; } .pane.h340 { max-height: 340px; }
+  .pane.h280 { max-height: 280px; } .pane.h260 { max-height: 260px; }
+  .pane.h220 { max-height: 220px; } .pane.h200 { max-height: 200px; }
   /* Long unbreakable tokens — bucket ids, place keys, urls — have no space to
      wrap at and will push the whole page sideways on a phone. The Lines
      editor's `line:1490490999523377273` heading was doing exactly that. */
@@ -764,6 +780,8 @@
     .listpane, .editor { width: 100%; max-width: none; min-width: 0;
                          flex: 0 0 auto; }
     .listpane { max-height: 44vh; overflow-y: auto; }
+  /* Item 106 — the six inline panes, released with it. */
+  .pane { max-height: none; overflow: visible; }
     .editor { max-height: none; overflow: visible; }
 
     /* ---- the map is combat truth now; it gets the full width and the
@@ -853,6 +871,7 @@
     <span class="tab" data-view="regions"><span class="ic">🧭</span><span class="lb">Regions</span></span>
     <span class="tab" data-view="locations"><span class="ic">📍</span><span class="lb">Locations</span></span>
     <span class="tab" data-view="drafts"><span class="ic">📗</span><span class="lb">Draft sheets<span id="draftcount" class="apvbadge" style="display:none">0</span></span></span>
+    <span class="tab" data-view="endgame"><span class="ic">🕯️</span><span class="lb">Endgame</span></span>
   </nav>
   <div id="sidefoot">
     <span id="status">connecting…</span>
@@ -1120,6 +1139,31 @@
   </div>
 </section>
 
+<section class="view" id="view-endgame">
+  <div class="card" style="overflow-wrap:anywhere">
+    <h3 style="margin-top:0">Where the campaign stands</h3>
+    <p class="hint">R30–R33. Everything here is DERIVED on every read — a
+    team's island is where its base or its players are, its faction is its
+    <code>side</code>. The only thing this record owns is the one thing the
+    game had no field for: which village is whose. Nothing is assumed, so an
+    unruled village counts for nobody.</p>
+    <div id="egending"></div>
+    <div id="eggaps"></div>
+  </div>
+  <div class="card"><h3 style="margin-top:0">Per island</h3>
+    <div id="egislands"></div></div>
+  <div class="card"><h3 style="margin-top:0">Teams</h3>
+    <div class="tblwrap"><table class="tbl" id="egteams"></table></div></div>
+  <div class="card"><h3 style="margin-top:0">Villages</h3>
+    <p class="hint">Click a standing to rule it. This is the field R30's
+    second condition needs and the game never had.</p>
+    <div class="tblwrap"><table class="tbl" id="egvillages"></table></div></div>
+  <div class="card"><h3 style="margin-top:0">The unite quest (R31-B and C)</h3>
+    <p class="hint">The trap door fires only while the quest is OPEN, and only
+    on the island with no name. It is a detector, not a block — nothing is
+    refused; the ending changes when blood lands.</p>
+    <div id="egquest"></div></div>
+</section>
 <section class="view" id="view-bases">
   <div class="listpane card">
     <input class="search" id="bsearch" type="text" placeholder="Search bases…">
@@ -1896,6 +1940,7 @@ function switchView(v) {
     locations: ["Locations", ""],
     drafts: ["Draft sheets", "unreviewed, so they ground nothing"],
     bases: ["Bases", "live interior maps"],
+    endgame: ["Endgame", "R30-R33, derived not stored"],
   };
   const [ttl, sub] = meta[v] || [v, ""];
   $("#pagetitle").firstChild.textContent = ttl;
@@ -1918,6 +1963,7 @@ function switchView(v) {
   if (v === "regions") Regions.load();
   if (v === "locations") Locations.load();
   if (v === "bases") Bases.load();
+  if (v === "endgame") Endgame.load();
   if (STACKED()) window.scrollTo({ top: 0 });
 }
 
@@ -3327,6 +3373,44 @@ const Npcs = {
         ${esc(this.activeFilters().join(" + ") || "these filters")}.</p>`;
   },
   npc() { return this.data.npcs.find(n => n.key === this.sel); },
+  /* Item 72. The state line under a goal or a carried intention.
+
+     LIVENESS IS THE SERVER'S ANSWER, never recomputed here. `goal_live` and
+     `contact_live` come off store.npc_goal_active / npc_contact_live, which
+     fail closed on an unparseable stamp, on no stamp at all, and on G2's
+     seven-day default — three branches a line of JavaScript would get wrong
+     while looking right. This function reads the flag and formats dates; it
+     never decides.
+
+     A SPENT CONTACT IS THE INTERESTING CASE and the reason this exists rather
+     than a bare value in the box. npc_contact_deliver stamps `said_at` rather
+     than deleting, so a dev can tell "never carried one" from "said it on
+     Tuesday" — and the box above renders EMPTY for a spent one, so saving an
+     untouched form cannot silently re-arm something already said. The sentence
+     lives here instead, where it is a record and not an input. */
+  intentHint(rec, live, kind) {
+    const day = t => new Date(t * 1000).toLocaleDateString();
+    const noun = kind === "goal" ? "goal" : "carried line";
+    if (!rec)
+      return kind === "goal"
+        ? "No goal. The hourly sweep may propose one for a ruling."
+        : "Carrying nothing.";
+    if (live) {
+      const src = rec.from === "dash" ? "set here"
+                : String(rec.from || "").startsWith("cmd:") ? "set by command"
+                : String(rec.from || "").startsWith("contact:")
+                  || String(rec.from || "").startsWith("goal:")
+                  ? "from a ruled proposal" : "";
+      const ends = rec.until ? ` Runs out ${esc(day(rec.until))}.` : "";
+      return kind === "goal"
+        ? `Live${src ? ", " + src : ""}.${ends}`
+        : `Waiting${src ? ", " + src : ""}.${ends} They raise it once, then it stops.`;
+    }
+    if (rec.said_at)
+      return `Said on ${esc(day(rec.said_at))} — ${esc(rec.text || "")}. `
+           + "Type a new one to give them something else.";
+    return `Their last ${noun} has run out: ${esc(rec.text || "")}`;
+  },
   renderEditor() {
     const box = $("#nedit");
     if (this.creating) { this.renderCreate(box); return; }
@@ -3360,10 +3444,40 @@ const Npcs = {
         <textarea id="nf-routine" rows="4"
           placeholder="Dawn — walks the salt line&#10;Noon — nets with the dock crew">${esc((n.routine || []).join("\n"))}</textarea>
         <hr>
+        <h2>Intentions <span class="muted">(what they are working toward, and
+            what they are waiting to say)</span></h2>
+        <label>Goal — what they work toward over days; it steers how they
+          answer (<code>/npc goal</code>)</label>
+        <input type="text" id="nf-goal" maxlength="300"
+               value="${esc(n.goal_live ? (n.goal || {}).text || "" : "")}"
+               placeholder="Find a student in Command">
+        <p class="hint">${this.intentHint(n.goal, n.goal_live, "goal")}</p>
+        <label>Carrying — one thing they raise THEMSELVES, next time you play
+          them in a scene (<code>/npc contact</code>)</label>
+        <textarea id="nf-contact" rows="2" maxlength="600"
+          placeholder="Carry an invitation across the water">${esc(n.contact_live ? (n.contact || {}).text || "" : "")}</textarea>
+        <p class="hint">${this.intentHint(n.contact, n.contact_live, "contact")}</p>
+        <p class="hint">A goal changes how they answer; a carried line is the
+        only thing that makes them speak FIRST. Neither posts anything — the
+        words still come out of a draft you approve.</p>
+        <hr>
         <h2>Combat card</h2>
         <div class="grid2">
-          <div><label>Tier</label><input type="text" id="nf-tier" value="${esc(c.tier || "")}"
-               placeholder="civilian / fighter / boss…"></div>
+          <!-- The nine tiers, in ladder order, and they MUST match
+               lnk_mini's NPC_RANK_ORDER — test_npc_tiers.py asserts this list
+               against it, because a tier that exists here and not there falls
+               through to the 10-20 damage default and to no rank at all.
+               Was a free-text box until 2026-08-31, whose placeholder offered
+               "fighter" — a role, never a tier. The server refuses anything
+               off this list either way; the picker is so nobody has to know
+               that. Blank is legal and means an NPC who does not fight. -->
+          <div><label>Tier</label><select id="nf-tier">
+            ${["", "civilian", "capable", "warrior", "spirit", "elite",
+               "boss", "mythical", "entity", "immortal"].map(t =>
+              `<option value="${t}"${(c.tier || "").toLowerCase() === t
+                ? " selected" : ""}>${t || "— none (does not fight) —"}</option>`
+            ).join("")}
+          </select></div>
           <!-- B6d/B6c: this input has always written combat.hp, which seating
                reads as BOTH current and max, so every hand-heal here
                permanently rewrote the sheet. It is the MAX now and says so;
@@ -3420,10 +3534,21 @@ const Npcs = {
     n.memories.forEach((m, i) => {
       const row = document.createElement("div");
       row.className = "memrow";
-      row.innerHTML = `<span class="t">${esc(m.text)}
-          <span class="muted">(${esc(m.when || "")}${m.scene ? " · " + esc(m.scene) : ""})</span></span>
+      // Item 92. A closed memory stays on the record and stays visible —
+      // that is the whole point of it not being a delete — so it is dimmed
+      // and struck rather than hidden, and the button says how to take it
+      // back. `forget` remains for a row that was wrong; `close` is for a row
+      // that was right and has stopped being live.
+      const done = !!m.resolved;
+      row.innerHTML = `<span class="t" style="${done ? "opacity:.55;text-decoration:line-through" : ""}">${esc(m.text)}
+          <span class="muted">(${esc(m.when || "")}${m.scene ? " · " + esc(m.scene) : ""}${done ? " · closed " + esc(String(m.resolved)) : ""})</span></span>
+        <button class="btn mini">${done ? "reopen" : "close"}</button>
         <button class="btn mini danger">forget</button>`;
-      row.querySelector("button").onclick = () =>
+      const [closeBtn, forgetBtn] = row.querySelectorAll("button");
+      closeBtn.onclick = () =>
+        api("/api/dash/npc-memory", { key: n.key, resolve: i, undo: done })
+          .then(() => Npcs.load()).catch(e => toast(e.message, true));
+      forgetBtn.onclick = () =>
         api("/api/dash/npc-memory", { key: n.key, forget: i })
           .then(() => Npcs.load()).catch(e => toast(e.message, true));
       mems.appendChild(row);
@@ -3477,6 +3602,8 @@ const Npcs = {
         notes: $("#nf-notes").value,
         task: $("#nf-task").value,
         routine: $("#nf-routine").value.split("\n").map(s => s.trim()).filter(Boolean),
+        goal: $("#nf-goal").value,
+        contact: $("#nf-contact").value,
         combat: {
           tier: $("#nf-tier").value,
           hp: $("#nf-hp").value === "" ? null : parseInt($("#nf-hp").value, 10),
@@ -4016,7 +4143,7 @@ const Lines = {
         </div>
         <hr>
         <h2>Transcript <span class="muted">— what the NPCs read (${info.transcript_len} lines${info.tail.length < info.transcript_len ? ", last " + info.tail.length + " shown" : ""})</span></h2>
-        <div style="max-height:320px;overflow:auto"><table class="tbl">
+        <div class="pane h320 tblwrap"><table class="tbl">
           ${info.tail.map((e2, i) => `
           <tr><td class="muted" style="width:34px">${start + i}</td>
             <td style="width:110px">${esc(e2.speaker)}</td>
@@ -4034,13 +4161,13 @@ const Lines = {
           <input type="text" id="ln-scenename" placeholder="snapshot name" style="flex:1"${off}>
           <button class="btn mini" id="ln-ssave"${off}>📸 Save current as scene</button>
         </div>
-        <div style="max-height:220px;overflow:auto">
+        <div class="pane h220 tblwrap">
           <table class="tbl">${sceneRows}</table></div>
-        <pre id="ln-sceneview" class="muted"
-             style="display:none;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+        <pre id="ln-sceneview" class="muted pane h260"
+             style="display:none;white-space:pre-wrap"></pre>
         <hr>
         <h2>Archive ledger <span class="muted">— read-only, oldest last</span></h2>
-        ${ledgerRows ? `<div style="max-height:200px;overflow:auto">
+        ${ledgerRows ? `<div class="pane h200 tblwrap">
           <table class="tbl">${ledgerRows}</table></div>`
           : "<p class='muted'>Nothing archived for this server.</p>"}
       </div>`;
@@ -4336,7 +4463,7 @@ const Shops = {
       <h2>${esc(this.data.teams[this.team])}'s stall
         <span class="muted">— ${v.stock.length} items</span></h2>
       <div class="frm">
-        <div style="max-height:340px;overflow:auto"><table class="tbl">
+        <div class="pane h340 tblwrap"><table class="tbl">
           ${stockRows || "<tr><td class='muted'>Empty stall.</td></tr>"}
         </table></div>
         <div style="display:flex;gap:7px;margin-top:8px">
@@ -4351,7 +4478,7 @@ const Shops = {
         </div>
         <hr>
         <h2>Marketplace <span class="muted">— every open listing, oldest first</span></h2>
-        <div style="max-height:280px;overflow:auto"><table class="tbl">
+        <div class="pane h280 tblwrap"><table class="tbl">
           ${mkt || "<tr><td class='muted'>No listings.</td></tr>"}
         </table></div>
       </div>`;
@@ -5060,6 +5187,84 @@ const Overview = {
 };
 
 /* ---------- Bases: live interior maps — hale markers, NPC dots ---------- */
+// R34 — the lead tracker. Read-mostly: four things are writable and every
+// other number on this tab is derived server-side, because a tracker you can
+// edit into agreeing with you is not a tracker.
+const Endgame = {
+  data: null,
+  async load() {
+    try { this.data = await api("/api/dash/endgame"); }
+    catch (e) { toast(e.message, true); return; }
+    this.render();
+  },
+  async set(body) {
+    try { this.data = await api("/api/dash/endgame", body); this.render(); }
+    catch (e) { toast(e.message, true); }
+  },
+  render() {
+    const d = this.data; if (!d) return;
+    const tone = { heroes: "#5cb85c", hollow: "#c9302c",
+                   divided: "#e0a800", open: "" }[d.ending.ending] || "";
+    $("#egending").innerHTML =
+      `<p style="font-size:1.3em;margin:.2em 0;color:${tone}"><b>${esc(
+        d.ending.ending.toUpperCase())}</b>${d.ending.final
+        ? " — final" : ""}</p><p class="muted">${esc(d.ending.why)}</p>`;
+    $("#eggaps").innerHTML = (d.gaps || []).length
+      ? "<p class='hint'><b>Gaps:</b><br>"
+        + d.gaps.map(g => "· " + esc(g)).join("<br>") + "</p>" : "";
+
+    $("#egislands").innerHTML = Object.values(d.islands).map(i => {
+      const v = i.villages;
+      return `<div class="card" style="margin:6px 0"><b>${esc(i.island)}</b>
+        — <span class="muted">${esc(i.status)}</span>
+        <br><span class="muted">rivals contesting: ${i.rivals_remaining}
+        · villages ${v.hollow} hollow / ${v.heroes} heroes / ${v.unaligned}
+        unruled of ${v.total}
+        · majority corrupted: ${i.majority_corrupted ? "yes" : "no"}</span>
+        <br><label style="min-height:44px;display:inline-flex;align-items:center">
+        <input type="checkbox" ${i.gate_is_override ? "checked" : ""}
+          data-gate="${esc(i.island)}"> gate open (override)</label>
+        ${i.gate_open && !i.gate_is_override
+          ? "<span class='muted'> — already open, derived from the villages</span>"
+          : ""}</div>`;
+    }).join("");
+    $("#egislands").querySelectorAll("[data-gate]").forEach(cb => {
+      cb.onchange = () => this.set({ gate: cb.dataset.gate, open: cb.checked });
+    });
+
+    $("#egteams").innerHTML =
+      "<tr><th>Team</th><th>Island</th><th>Faction</th></tr>"
+      + d.teams.map(t => `<tr><td>${esc(t.name)}</td>
+        <td>${esc(t.island || "—")}</td>
+        <td>${t.side ? esc(t.side) : "<span class='muted'>none — counts as a rival</span>"}</td></tr>`).join("");
+
+    $("#egvillages").innerHTML =
+      "<tr><th>Village</th><th>Island</th><th>Standing</th></tr>"
+      + d.villages.map(v => `<tr><td>${esc(v.name)}</td>
+        <td>${esc(v.island)}</td><td><select data-vill="${esc(v.key)}"
+        style="min-height:44px;font-size:16px">
+        ${["unaligned", "heroes", "hollow"].map(o =>
+          `<option value="${o}"${o === v.standing ? " selected" : ""}>${o}</option>`
+        ).join("")}</select></td></tr>`).join("");
+    $("#egvillages").querySelectorAll("[data-vill]").forEach(sel => {
+      sel.onchange = () => this.set({ village: sel.dataset.vill,
+                                      standing: sel.value });
+    });
+
+    $("#egquest").innerHTML = `
+      <label style="min-height:44px;display:flex;align-items:center">
+        <input type="checkbox" id="egopen" ${d.quest_open ? "checked" : ""}>
+        &nbsp;the unite quest is OPEN (arms the trap door)</label>
+      <label style="min-height:44px;display:flex;align-items:center">
+        <input type="checkbox" id="egunited" ${d.united ? "checked" : ""}>
+        &nbsp;the islands have UNITED (R31-B complete)</label>
+      ${d.trapdoor ? `<p style="color:#c9302c"><b>The trap door has fired.</b>
+        ${esc(d.trapdoor.who)} — ${esc(d.trapdoor.why)}</p>` : ""}`;
+    $("#egopen").onchange = e => this.set({ quest_open: e.target.checked });
+    $("#egunited").onchange = e => this.set({ united: e.target.checked });
+  },
+};
+
 const Bases = {
   data: null, sel: null, creating: false, details: false,
   arrange: false, selHale: null, newHale: false, selNpc: null,
