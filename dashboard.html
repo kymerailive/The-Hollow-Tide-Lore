@@ -96,6 +96,9 @@
   .apvdetail { margin-top: 4px; font-size: 13.5px; color: var(--dim);
                line-height: 1.45; overflow-wrap: anywhere; }
   .apvmeta { margin-top: 5px; font-size: 12px; color: var(--faint); }
+  .apvscene { margin-top: 6px; font-size: 12.5px; color: var(--dim);
+              white-space: pre-wrap; border-left: 2px solid var(--line);
+              padding-left: 8px; }
   /* Some rulings take a value the card can't guess — a proposed job needs its
      tier and cap set BY THE DEV at the moment they approve it. The queue row
      ships a `needs` list and these render it. */
@@ -995,6 +998,7 @@
         <button data-mode="all">All</button>
       </div>
       <select id="naff" title="Affiliation"><option value="">Any affiliation</option></select>
+      <select id="nwhere" title="Place"><option value="">Any place</option></select>
       <!-- Only shown when the payload actually spans more than one island;
            /api/dash/npcs is island-scoped, so usually it does not. -->
       <select id="nisland" title="Island" style="display:none"><option value="">Any island</option></select>
@@ -1007,6 +1011,13 @@
       <span class="fchip" data-f="note" title="Has a scene note steering their replies">scene note</span>
       <span class="fchip" data-f="teaches"
             title="Carries a teaches branch, or is one of the four Merchant teachers the engine hardcodes">teaches</span>
+    </div>
+    <!-- NPC-3. A GROUPING, not a filter: it sits outside #nchips so the chip
+         loop never wires it as one, and it reads the Place filter's own index,
+         so turning it on fetches nothing. -->
+    <div class="fchips">
+      <span class="fchip" id="nbyplace"
+            title="Group the list by where each NPC stands; No place comes last">By place</span>
     </div>
     <button class="btn mini" id="nnew">＋ New NPC</button>
     <button class="btn mini" id="nallon" title="Auto-reply ON for the NPCs shown">⚡ all auto</button>
@@ -1411,13 +1422,17 @@ async function saveToken() {
   // so knowing the website password is enough, and the password itself
   // never leaves the browser.
   TOKEN = raw;
-  let ok = false;
+  // Only a real 401 means "that is not the token". A bot that is mid-restart,
+  // or a funnel answering 502, says nothing about the value — hashing then
+  // stored a token that could never work, and the first poll after the bot
+  // came back wiped it and reopened this gate.
+  let rejected = false;
   try {
     const r = await fetch(API + "/api/state",
                           { headers: { "Authorization": "Bearer " + TOKEN } });
-    ok = r.ok;
-  } catch (e) { ok = false; }
-  if (!ok && raw) {
+    rejected = r.status === 401;
+  } catch (e) { rejected = false; }
+  if (rejected && raw) {
     TOKEN = await sha256hex(raw.replace(/\s+/g, "").toLowerCase());
   }
   localStorage.setItem("ht_token", TOKEN);
@@ -1655,7 +1670,7 @@ const Approvals = {
     }
     const LABEL = { forge: ["🜲", "Forge"], job: ["🧰", "Job"],
                     travel: ["🧭", "Route"], encounter: ["📡", "Encounter"],
-                    draft: ["🎭", "Draft"] };
+                    draft: ["🎭", "Draft"], npc: ["🗣️", "NPC plan"] };
     const now = Date.now() / 1000;
     box.innerHTML = '<div class="apvlist">' + this.rows.map(r => {
       const [ic, kind] = LABEL[r.queue] || ["•", r.queue];
@@ -1671,6 +1686,10 @@ const Approvals = {
           "</span>" : "") + '<span class="apvage">' + this.age(r.at, now) +
           "</span></div>" +
         '<div class="apvtitle">' + esc(r.title || "") + "</div>" +
+        // DEV-11: the scene a draft answers (what was said, where, who is on
+        // the line) or who asked for an NPC plan — above the words, so a dev
+        // can see what they are approving before reading it.
+        (r.scene ? '<div class="apvscene">' + esc(r.scene) + "</div>" : "") +
         (r.detail ? '<div class="apvdetail">' + esc(r.detail) + "</div>" : "") +
         (r.meta ? '<div class="apvmeta">' + esc(r.meta) + "</div>" : "") +
         (needs ? '<div class="apvneeds">' + needs + "</div>" : "") +
@@ -2753,6 +2772,14 @@ const Players = {
         `<option value="${g}" ${p.team === g ? "selected" : ""}>${esc(n)}</option>`));
     box.innerHTML = `
       <h2>${esc(p.name)} <span class="muted">· ${esc(p.id)}</span></h2>
+      ${/* IDN-10's exit. A former name stays RESERVED — nobody else may
+            register it — until a dev releases it, and this is where. The
+            player's own card never shows these; this page is dev-only. */
+        (p.former_names || []).length
+        ? `<p class="hint" id="pf-former">Former names: ${esc(p.former_names.join(", "))}
+           — reserved, so nobody else can take them.
+           <button class="btn mini" id="pf-formerclear">Release</button></p>`
+        : ""}
       <div class="frm">
         <div class="grid2">
           <div><label>Name</label><input type="text" id="pf-name" value="${esc(p.name)}"></div>
@@ -2792,6 +2819,16 @@ const Players = {
                  counting.</p>`}
           <div><label style="margin-top:14px"><input type="checkbox" id="pf-hollow"
                ${p.hollow ? "checked" : ""}> Hollow side</label></div>
+          <div><label>Faction rank (questline reward)</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" id="pf-frfaction" style="flex:1" placeholder="faction key"
+                     value="${esc(Object.keys(p.faction_ranks || {})[0] || '')}">
+              <input type="number" id="pf-frrank" style="width:5.5em" placeholder="rank"
+                     value="${esc(String(Object.values(p.faction_ranks || {})[0] ?? ''))}">
+            </div>
+            <p class="hint" style="margin:2px 0 0">A questline reward only ever
+              RAISES this. Here it is set exactly, and an EMPTY rank clears the
+              faction outright.</p></div>
         </div>
         ${p.label.toLowerCase() === "spectator"
           ? '<p class="hint" style="margin-top:10px">Spectators don\'t appear on the map.</p>'
@@ -2949,6 +2986,14 @@ const Players = {
         hollow: $("#pf-hollow").checked,
         titles: $("#pf-titles").value.split("\n").map(s => s.trim()).filter(Boolean),
       };
+      // ONLY WHEN A FACTION IS NAMED, for the same reason hp_max is guarded
+      // below: sending this unconditionally would clear somebody rank on
+      // every save of any other field, because a blank rank means remove.
+      const _fk = $("#pf-frfaction").value.trim();
+      if (_fk) {
+        const _rv = $("#pf-frrank").value.trim();
+        body.faction_rank = { faction: _fk, rank: _rv === "" ? null : parseInt(_rv, 10) };
+      }
       // ONLY WHEN THE DEV ACTUALLY MOVED IT. Sending hp_max unconditionally
       // would pin a derived max on every save of any other field — rename a
       // player who has never fought and their 150+bonus would silently become
@@ -2957,6 +3002,16 @@ const Players = {
       const hpMax = parseInt($("#pf-hpmax").value || "0", 10);
       if (hpMax > 0 && hpMax !== p.hp_max) body.hp_max = hpMax;
       api("/api/dash/player", body)
+        .then(r => { toast(r.changed.length ? "Saved: " + r.changed.join(", ")
+                                            : "No changes"); Players.load(); })
+        .catch(e => toast(e.message, true));
+    };
+    const formerBtn = $("#pf-formerclear");
+    if (formerBtn) formerBtn.onclick = () => {
+      if (!confirm(`Release ${p.name}'s former names (${p.former_names.join(", ")})? ` +
+                   "Anyone may then register them. The history that reads them is kept."))
+        return;
+      api("/api/dash/player", { id: p.id, former_names_clear: true })
         .then(r => { toast(r.changed.length ? "Saved: " + r.changed.join(", ")
                                             : "No changes"); Players.load(); })
         .catch(e => toast(e.message, true));
@@ -3136,16 +3191,36 @@ $("#pnew").onclick = () => { Players.creating = true; Players.renderEditor(); };
 // Mirrors MERCHANT_TEACHERS in lnk_mini.py — the four who teach the Merchant
 // trade by being on that list rather than by carrying a `teaches` field.
 const MERCHANT_TEACHERS = ["koa", "noe", "piko", "kawelo"];
+const NPC_NO_PLACE = "~no-place";
+function npcWhereIndex(cop) {
+  const idx = { npcs: {}, names: {} };
+  for (const row of ((cop && cop.places) || [])) {
+    if (!row || !row.place) continue;
+    idx.names[row.place] = row.name || row.place;
+    for (const entry of (row.npcs || [])) {
+      if (entry && entry.key) idx.npcs[entry.key] = row.place;
+    }
+  }
+  return idx;
+}
+function npcStandsAt(where, n, idx) {
+  if (!where) return true;
+  const at = ((idx && idx.npcs) || {})[n.key];
+  if (where === NPC_NO_PLACE) return !at && !n.dead;
+  return at === where;
+}
 const Npcs = {
   data: null, sel: null, creating: false,
   mode: "world",          // world | forged | all
   filters: new Set(),     // the chips above the list
-  island: "", aff: "",
+  island: "", aff: "", where: "", whereIdx: null,
   collapsed: new Set(),   // affiliation groups folded shut
   shown: [],              // what the last renderList() actually drew
+  byPlace: false,         // NPC-3: group the list by where they stand
   async load() {
     try { this.data = await api(islq("/api/dash/npcs")); }
     catch (e) { return; }
+    await this.loadWhere();
     this.fillSelects();
     this.renderList();
     this.renderEditor();
@@ -3236,12 +3311,45 @@ const Npcs = {
      scroll this tab exists to break up. There, the owner is the useful axis:
      seven players forged these, not one. */
   groupOf(n) {
+    // NPC-3. By place wins over both, and reads whereIdx — the same index the
+    // Place filter reads, off the co-presence payload the tab already fetched.
+    // With no index (that fetch failed) it falls back rather than piling the
+    // whole roster under No place.
+    if (this.byPlace && this.whereIdx) {
+      const at = (this.whereIdx.npcs || {})[n.key];
+      return at ? ((this.whereIdx.names || {})[at] || at) : "No place";
+    }
     if (this.mode === "forged")
       return this.owner(n) ? `Forged by ${this.owner(n)}` : "Forged";
     return this.affOf(n);
   },
   inMode(n) {
     return this.mode === "all" || this.forged(n) === (this.mode === "forged");
+  },
+  /* Group headers in name order, except that By place puts No place LAST:
+     the unplaced are the question the grouping is asked to answer, and in
+     name order they would land between "Kia Manu" and "Salt-and-Shell". */
+  groupOrder(keys) {
+    const sorted = [...keys].sort((x, y) => x.localeCompare(y));
+    if (!(this.byPlace && this.whereIdx)) return sorted;
+    return sorted.filter(k => k !== "No place")
+      .concat(sorted.filter(k => k === "No place"));
+  },
+  /* No fetch here, on purpose: whereIdx is already loaded with the roster and
+     refreshed by a Place pick. A second co-presence call per click would be a
+     second copy of an answer the tab already holds. */
+  toggleByPlace() {
+    this.byPlace = !this.byPlace;
+    $("#nbyplace").classList.toggle("on", this.byPlace);
+    this.renderList();
+  },
+  async loadWhere() {
+    try { this.whereIdx = npcWhereIndex(await api("/api/dash/copresence")); }
+    catch (e) { this.whereIdx = null; this.where = ""; return; }
+  },
+  async pickWhere(v) {
+    this.where = v;
+    await this.loadWhere(); this.fillSelects(); this.renderList();
   },
   /* Rebuilt on every load AND on every mode switch, because the affiliation
      options depend on the mode: with forged() falling back to affiliation,
@@ -3250,7 +3358,7 @@ const Npcs = {
      assigning a value no <option> carries silently deselects the control
      while match() keeps filtering on it, which reads as a dead roster. */
   fillSelects() {
-    const isl = $("#nisland"), aff = $("#naff");
+    const isl = $("#nisland"), aff = $("#naff"), where = $("#nwhere");
     const islands = this.data.islands || {};
     const label = k => k === "*" ? "Every island" : (islands[k] || k);
     const seenIsl = [...new Set(this.data.npcs.map(n => n.island).filter(Boolean))].sort();
@@ -3268,12 +3376,38 @@ const Npcs = {
     aff.innerHTML = '<option value="">Any affiliation</option>' + affs.map(a =>
       `<option value="${esc(a)}">${esc(a)}</option>`).join("");
     aff.value = this.aff;
+    const wheres = new Map();
+    if (!this.whereIdx) {
+      where.innerHTML = '<option value="">Any place</option>';
+      where.style.display = "none";
+      $("#nbyplace").style.display = "none";
+    } else {
+      const byNpc = this.whereIdx.npcs || {};
+      const names = this.whereIdx.names || {};
+      for (const n of this.data.npcs.filter(n => this.inMode(n))) {
+        const at = byNpc[n.key];
+        if (at) wheres.set(at, names[at] || at);
+        else if (!n.dead) wheres.set(NPC_NO_PLACE, "No place");
+      }
+      const opts = [...wheres.entries()]
+        .filter(([k]) => k !== NPC_NO_PLACE)
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .map(([k, nm]) => `<option value="${esc(k)}">${esc(nm)}</option>`)
+        .join("");
+      where.innerHTML = '<option value="">Any place</option>' + opts
+        + (wheres.has(NPC_NO_PLACE)
+           ? `<option value="${NPC_NO_PLACE}">No place</option>` : "");
+      where.style.display = "";
+      $("#nbyplace").style.display = "";
+    }
+    if (this.where && !wheres.has(this.where)) this.where = "";
+    where.value = this.where;
   },
   /* An island switch reloads every tab scoped to the new island; filters held
      over from the old one would survive as invisible state. */
   resetFilters() {
     this.mode = "world"; this.filters.clear();
-    this.island = ""; this.aff = ""; this.collapsed.clear();
+    this.island = ""; this.aff = ""; this.where = ""; this.collapsed.clear();
     const s = $("#nsearch"); if (s) s.value = "";
     $("#nmode").querySelectorAll("button").forEach(b =>
       b.classList.toggle("on", b.dataset.mode === "world"));
@@ -3284,6 +3418,7 @@ const Npcs = {
     const on = [];
     if (this.mode !== "all") on.push(this.mode === "forged" ? "Forged" : "World");
     if (this.aff) on.push(this.aff);
+    if (this.where) on.push(this.where === NPC_NO_PLACE ? "No place" : "at " + (((this.whereIdx || {}).names || {})[this.where] || this.where));
     if (this.island) on.push($("#nisland").selectedOptions[0].textContent);
     this.filters.forEach(f => on.push(f));
     if ($("#nsearch").value.trim()) on.push(`“${$("#nsearch").value.trim()}”`);
@@ -3293,6 +3428,7 @@ const Npcs = {
     if (!this.inMode(n)) return false;
     if (this.island && n.island !== this.island) return false;
     if (this.aff && this.affOf(n) !== this.aff) return false;
+    if (this.where && !npcStandsAt(this.where, n, this.whereIdx)) return false;
     const f = this.filters;
     if (f.has("noportrait") && this.hasPortrait(n)) return false;
     if (f.has("nocombat") && this.hasCombat(n)) return false;
@@ -3322,7 +3458,7 @@ const Npcs = {
       if (!groups.has(a)) groups.set(a, []);
       groups.get(a).push(n);
     }
-    for (const a of [...groups.keys()].sort((x, y) => x.localeCompare(y))) {
+    for (const a of this.groupOrder(groups.keys())) {
       const rows = groups.get(a), shut = this.collapsed.has(a);
       const hdr = document.createElement("div");
       hdr.className = "grphdr";
@@ -3516,6 +3652,8 @@ const Npcs = {
           <button class="btn danger" id="nf-del">Delete…</button>
         </div>
         <hr>
+        ${this.agencyCard(n)}
+        <hr>
         <h2>Durable memories (${n.memories.length})</h2>
         <div id="nf-mems"></div>
         <div class="btnrow" style="margin-top:6px">
@@ -3532,6 +3670,8 @@ const Npcs = {
         </div>
       </div>`;
     this.wirePlaceRow(n);
+    $("#nf-agy-save").onclick = () => this.saveAgency(n);
+    this.loadAgency(n);
     const hp = (body) => api("/api/dash/hp",
         { kind: "npc", id: n.key, ...body,
           author: localStorage.getItem("ht_author") || "" })
@@ -3639,6 +3779,165 @@ const Npcs = {
         .catch(e => toast(e.message, true));
     };
   },
+  /* ---------- NPC-3: agency ----------
+     The gate's settings and the dashboard's read of what it decided. The
+     same answer /dev agency prints: GET /api/dash/npc-agency and the command
+     both call agency_summary.
+
+     ITS OWN BUTTON, and never a field of Save NPC. That route's payload posts
+     every field on every press, so an agency riding in it would let a page
+     loaded before a live flip (Kanani's, through the API) put her back in
+     shadow on an unrelated save of her titles. Save agency posts {key, agency}
+     and nothing else, and first re-reads the record: if it moved since this
+     page loaded, the save is refused rather than written over it. */
+  agencyTeams(a) {
+    const known = (a && a.known_teams) || [];
+    const names = Object.assign({},
+      (typeof state !== "undefined" && state && state.teams) || {},
+      (typeof Players !== "undefined" && Players.data && Players.data.teams) || {});
+    const ids = [...new Set([...Object.keys(names), ...known])];
+    if (!ids.length) return '<p class="hint">No teams loaded.</p>';
+    return ids.map(g => `<label style="display:inline-flex;gap:4px;margin-right:10px">`
+      + `<input type="checkbox" value="${esc(g)}"${known.includes(g) ? " checked" : ""}>`
+      + `${esc(names[g] || g)}</label>`).join("");
+  },
+  agencyCard(n) {
+    const a = n.agency || {};
+    const rows = v => esc((v || []).join("\n"));
+    const pick = (id, cur, pairs) => `<select id="${id}">` + pairs.map(([v, t]) =>
+      `<option value="${v}"${v === cur ? " selected" : ""}>${esc(t)}</option>`).join("")
+      + "</select>";
+    const trusted = Object.entries(a.trusted || {})
+      .map(([uid, label]) => `${uid} ${label || ""}`.trim()).join("\n");
+    return `
+        <h2>Agency <span class="muted">(when the gate lets them speak — saved on its own)</span></h2>
+        <label>Mode</label>
+        ${pick("nf-agy-mode", a.mode || "shadow",
+               [["shadow", "Shadow: decides, says nothing"],
+                ["live", "Live: the gate decides when she speaks"]])}
+        <div class="grid2">
+          <div><label>Trigger</label>${pick("nf-agy-trigger", a.trigger || "companion",
+               [["companion", "companion"], ["place", "place"]])}</div>
+          <div><label>Standing</label>${pick("nf-agy-standing", a.standing || "shadow",
+               [["shadow", "shadow"], ["live", "live"]])}</div>
+          <div><label>Reticence (0 to 3)</label>${pick("nf-agy-reticence",
+               String(a.reticence ?? 0), [["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"]])}</div>
+        </div>
+        <label>Charge — what they are for</label>
+        <textarea id="nf-agy-charge" rows="2">${esc(a.charge || "")}</textarea>
+        <label>Domain — up to 8, one per line</label>
+        <textarea id="nf-agy-domain" rows="3">${rows(a.domain)}</textarea>
+        <label>Risk terms — up to 8, one per line</label>
+        <textarea id="nf-agy-risk" rows="3">${rows(a.risk_terms)}</textarea>
+        <label>Hard lines — up to 8, one per line</label>
+        <textarea id="nf-agy-hard" rows="3">${rows(a.hard_lines)}</textarea>
+        <label>Trusted — one per line: a Discord id, then a label</label>
+        <textarea id="nf-agy-trusted" rows="2"
+          placeholder="841689411355541505 Velvet">${esc(trusted)}</textarea>
+        <label>Known teams — up to 4</label>
+        <div id="nf-agy-teams">${this.agencyTeams(a)}</div>
+        <p class="hint" id="nf-agy-err"></p>
+        <div class="btnrow">
+          <button class="btn primary" id="nf-agy-save">Save agency</button>
+        </div>
+        <p class="hint">Save NPC never sends this card, and this button sends nothing else.</p>
+        <h3>Tasks</h3>
+        <div id="nf-agy-tasks"><p class="muted">Loading…</p></div>
+        <h3>Gate reasons</h3>
+        <div id="nf-agy-reasons" class="tblwrap"><p class="muted">Loading…</p></div>`;
+  },
+  /* What the card says, as the route's validator will read it. Lists are one
+     per line; the validator clamps sizes and refuses shapes, and its 400 text
+     is what the dev sees. */
+  agencyFromForm() {
+    const lines = id => String($(id).value || "").split("\n")
+      .map(s => s.trim()).filter(Boolean);
+    const trusted = {};
+    for (const line of lines("#nf-agy-trusted")) {
+      const cut = line.search(/\s/);
+      if (cut < 0) trusted[line] = "";
+      else trusted[line.slice(0, cut)] = line.slice(cut).trim();
+    }
+    const teams = [...$("#nf-agy-teams").querySelectorAll("input")]
+      .filter(i => i.checked).map(i => i.value);
+    return {
+      charge: String($("#nf-agy-charge").value || "").trim(),
+      domain: lines("#nf-agy-domain"),
+      risk_terms: lines("#nf-agy-risk"),
+      hard_lines: lines("#nf-agy-hard"),
+      reticence: parseInt($("#nf-agy-reticence").value || "0", 10) || 0,
+      trusted,
+      known_teams: teams,
+      mode: $("#nf-agy-mode").value || "shadow",
+      trigger: $("#nf-agy-trigger").value || "companion",
+      standing: $("#nf-agy-standing").value || "shadow",
+    };
+  },
+  agencyUrl(n) { return "/api/dash/npc-agency?key=" + encodeURIComponent(n.key); },
+  async saveAgency(n) {
+    const err = $("#nf-agy-err");
+    err.textContent = "";
+    const fail = msg => { err.textContent = msg; toast(msg, true); };
+    const agency = this.agencyFromForm();
+    let fresh;
+    try { fresh = await api(this.agencyUrl(n)); }
+    catch (e) { fail(e.message); return; }
+    if (JSON.stringify(fresh.agency || null) !== JSON.stringify(n.agency || null)) {
+      fail("Their agency changed since this page loaded. Reload the tab "
+           + "before saving, or this would write over it.");
+      return;
+    }
+    let r;
+    try { r = await api("/api/dash/npc", { key: n.key, agency }); }
+    catch (e) { fail(e.message); return; }
+    toast((r.changed || []).length ? "Saved: " + r.changed.join(", ") : "No changes");
+    this.load();
+  },
+  agencyTasksHtml(s) {
+    const tasks = (s && s.tasks) || [];
+    if (!tasks.length) return '<p class="muted">No tasks</p>';
+    return tasks.map(t => {
+      const when = t.at ? new Date(t.at * 1000).toLocaleString() : "";
+      return `<div class="memrow"><span class="t"><b>${esc(t.status)}</b> — ${esc(t.what)}
+          <span class="muted">(${esc(t.team || "no team")}${t.asked_by ? " · asked by " + esc(t.asked_by) : ""}${when ? " · " + esc(when) : ""})</span>${
+          t.result ? `<br><span class="muted">→ ${esc(t.result)}</span>` : ""}</span></div>`;
+    }).join("");
+  },
+  agencyReasonsHtml(s) {
+    const st = (s && s.state) || {};
+    const hhmm = t => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const head = Object.keys(st).length
+      ? `<p class="hint">Last spoke ${st.last_spoke_at ? esc(hhmm(st.last_spoke_at)) : "never"}`
+        + ` · intervened ${Object.keys(st.intervened || {}).length}`
+        + ` · noted ${Object.keys(st.noted || {}).length}</p>` : "";
+    const pairs = (s && s.reasons) || [];
+    if (!pairs.length) return head + '<p class="muted">Nothing gated yet</p>';
+    return head + `<table class="tbl"><tr><th>Player</th><th>speak</th><th>note</th>`
+      + `<th>silent</th><th>dropped</th><th>Last decisions</th></tr>`
+      + pairs.map(p => {
+          const n = p.n || {};
+          const last = (p.last || []).map(r =>
+            `${esc(hhmm(r.at || 0))} <code>${esc(r.b || "")}</code> ${esc(r.d)}`
+            + ((r.r || []).length ? ` [${esc(r.r.join(", "))}]` : "")).join("<br>");
+          return `<tr><td>${esc(p.name)}</td><td>${n.speak || 0}</td><td>${n.note || 0}</td>`
+            + `<td>${n.silent || 0}</td><td>${p.dropped || 0}</td><td>${last}</td></tr>`;
+        }).join("") + "</table>";
+  },
+  /* Lazy: the roster payload does not carry the task rows or the reasons
+     ring, so they are read when an NPC is opened, and dropped if the dev has
+     moved on to another one before the answer lands. */
+  async loadAgency(n) {
+    let s;
+    try { s = await api(this.agencyUrl(n)); }
+    catch (e) {
+      $("#nf-agy-tasks").innerHTML = `<p class="muted">${esc(e.message)}</p>`;
+      $("#nf-agy-reasons").innerHTML = "";
+      return;
+    }
+    if (this.sel !== n.key) return;
+    $("#nf-agy-tasks").innerHTML = this.agencyTasksHtml(s);
+    $("#nf-agy-reasons").innerHTML = this.agencyReasonsHtml(s);
+  },
   renderCreate(box) {
     box.innerHTML = `
       <h2>New NPC</h2>
@@ -3689,6 +3988,8 @@ $("#nchips").querySelectorAll(".fchip").forEach(c => {
 });
 $("#nisland").onchange = e => { Npcs.island = e.target.value; Npcs.renderList(); };
 $("#naff").onchange = e => { Npcs.aff = e.target.value; Npcs.renderList(); };
+$("#nwhere").onchange = e => Npcs.pickWhere(e.target.value);
+$("#nbyplace").onclick = () => Npcs.toggleByPlace();
 
 /* Scoped to what the filters are showing, not the whole table.
    /api/dash/npc-bulk takes no key list, and it flips every NPC in the save —
@@ -3851,9 +4152,13 @@ const Items = {
                           : '<button class="btn danger" id="if-del">Delete…</button>'}
         </div>
       </div>`;
-    $("#if-save").onclick = () => {
+    // What a Save posts, read off the form. It also runs once right here, as
+    // the form is drawn, and that snapshot rides along as `loaded`: the server
+    // measures an edit against what THIS tab showed, so a tab left open while
+    // the card changed elsewhere writes back only what was changed in it.
+    const collect = () => {
       const kind = $("#if-kind").value;
-      api("/api/dash/item", {
+      return {
         name: $("#if-name").value,
         category: $("#if-cat").value,
         cost: $("#if-cost").value === "" ? null : parseInt($("#if-cost").value, 10),
@@ -3868,8 +4173,14 @@ const Items = {
           dot: $("#if-dot").value === "" ? null : parseInt($("#if-dot").value, 10),
           ooc: $("#if-ooc").checked,
         },
-      }).then(() => {
-        toast(this.creating ? "Item created" : "Item saved");
+      };
+    };
+    const loaded = this.creating ? null : collect();
+    $("#if-save").onclick = () => {
+      api("/api/dash/item", loaded ? { ...collect(), loaded } : collect()).then(r => {
+        const dropped = (r && r.dropped) || [];
+        toast((this.creating ? "Item created" : "Item saved")
+              + (dropped.length ? " — the kind change dropped " + dropped.join(", ") : ""));
         const key = $("#if-name").value.trim().toLowerCase();
         this.creating = false;
         this.sel = key;
@@ -3952,15 +4263,118 @@ const Quests = {
       return m ? { text: m[1], done: true } : { text: l, done: false };
     });
   },
+  // One team's run, read-only apart from Remove. Progress is ENGINE state:
+  // the editor authors stages, the engine writes runs, and letting this panel
+  // type into a run would give one record two writers.
+  renderRuns(it) {
+    const runs = it.runs || {};
+    const keys = Object.keys(runs);
+    if (!keys.length)
+      return "<p class='muted'>No teams on this questline yet.</p>";
+    const stages = it.stages || [];
+    return keys.map(g => {
+      const r = runs[g] || {};
+      const st = r.stages || {};
+      const done = stages.filter(s => (st[s.key] || {}).status === "passed").length;
+      const now = Date.now() / 1000;
+      const cells = stages.length
+        ? stages.map(s => {
+            const row = st[s.key] || {};
+            const s2 = row.status || "pending";
+            // A failed attempt leaves the stage OPEN with a retry clock (R68);
+            // showing "open" alone would read as ready when it is not.
+            const cd = (s2 === "open" && (row.retry_at || 0) > now)
+              ? ` · retry in ${Math.ceil(((row.retry_at - now) / 60))}m` : "";
+            const att = row.attempts ? ` ·${row.attempts}×` : "";
+            const btns = s2 === "open"
+              ? ` <button class="btn qs-pass" data-g="${esc(g)}" data-s="${esc(s.key)}">pass</button>`
+                + `<button class="btn qs-fail" data-g="${esc(g)}" data-s="${esc(s.key)}">fail</button>`
+              : "";
+            return `<span class="pill" title="${esc(s.title)} (${esc(s.kind)})">`
+              + `${esc(s.key)}: ${s2}${att}${cd}</span>${btns}`;
+          }).join(" ")
+        : "<span class='muted'>no stages authored</span>";
+      return `<div class="qrun" style="border:1px solid var(--line,#333);border-radius:6px;padding:8px;margin-bottom:6px">
+        <b>${esc((this.data.teams || {})[g] || g)}</b>
+        — ${done} of ${stages.length} passed
+        ${r.completed_at ? `· <b>completed ${esc(r.completed_at)}</b>` : ""}
+        <div style="margin:4px 0">${cells}</div>
+        <button class="btn danger qr-del" data-g="${esc(g)}">Remove this team</button>
+      </div>`;
+    }).join("");
+  },
+  // Read the stage rows straight back out of the DOM. Adding or removing a
+  // stage re-renders the whole editor, so every other field has to survive
+  // that too — see formSnapshot.
+  collectStages() {
+    return Array.from(document.querySelectorAll("#qf-stages .qstage")).map(el => {
+      let cfg = {};
+      const raw = el.querySelector(".qs-config").value.trim();
+      if (raw) {
+        try { cfg = JSON.parse(raw); } catch (e) { throw new Error(
+          `Stage “${el.querySelector(".qs-title").value || "?"}”: config is not valid JSON`); }
+        if (cfg === null || typeof cfg !== "object" || Array.isArray(cfg))
+          throw new Error("A stage config must be a JSON object, like {}");
+      }
+      const _k = el.querySelector(".qs-key");
+      return {
+        key: _k ? _k.value.trim() : "",
+        kind: el.querySelector(".qs-kind").value,
+        title: el.querySelector(".qs-title").value,
+        npc: el.querySelector(".qs-npc").value,
+        reward: el.querySelector(".qs-reward").value,
+        config: cfg,
+      };
+    });
+  },
+  rewardCfg() {
+    const raw = ($("#qf-rewardcfg") || { value: "" }).value.trim();
+    if (!raw) return {};
+    let v;
+    try { v = JSON.parse(raw); }
+    catch (e) { throw new Error("Completion reward: that is not valid JSON"); }
+    if (v === null || typeof v !== "object" || Array.isArray(v))
+      throw new Error("Completion reward must be a JSON object, like {}");
+    return v;
+  },
+  formSnapshot() {
+    return {
+      title: $("#qf-title").value, status: $("#qf-status").value,
+      giver: $("#qf-giver").value, place: $("#qf-place").value,
+      reward: $("#qf-reward").value, author: $("#qf-author").value,
+      summary: $("#qf-summary").value, dm: $("#qf-dm").value,
+      beats: this.parseBeats($("#qf-beats").value),
+      stages: this.collectStages(),
+      reward_config: this.rewardCfg(),
+    };
+  },
   renderEditor() {
     const box = $("#qedit");
-    const it = this.creating
+    // `draft` is a snapshot taken when a stage is added or removed, so that
+    // re-rendering the editor does not throw away everything else typed.
+    const draft = this.draft; this.draft = null;
+    const it = draft ? Object.assign({}, this.creating ? {} : this.quest(), draft)
+      : this.creating
       ? { title: "", status: "draft", giver: "", place: "", summary: "",
-          dm: "", reward: "", beats: [], author: localStorage.getItem("ht_author") || "" }
+          dm: "", reward: "", beats: [], stages: [],
+          author: localStorage.getItem("ht_author") || "" }
       : this.quest();
     if (!it) { box.innerHTML = "<p class='muted'>Select a questline.</p>"; return; }
     const places = Object.entries(this.data.places)
       .sort((a, b) => a[1].localeCompare(b[1]));
+    const npcs = Object.entries(this.data.npcs || {})
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    // The five live quests were authored with DISPLAY NAMES ("Madame M"),
+    // and quest_block matches either a name or a key — so the picker has to
+    // recognise both, or opening an existing quest would show nothing chosen
+    // and saving it would blank the giver. New saves store the key.
+    const npcOpts = (sel) => {
+      const want = String(sel || "").trim().toLowerCase();
+      return npcs.map(([k, n]) => {
+        const hit = want && (k === want || n.toLowerCase() === want);
+        return `<option value="${esc(k)}" ${hit ? "selected" : ""}>${esc(n)}</option>`;
+      }).join("");
+    };
     box.innerHTML = `
       <h2>${this.creating ? "New questline" : esc(it.title)}</h2>
       <div class="frm">
@@ -3968,11 +4382,20 @@ const Quests = {
           <div><label>Title</label>
             <input type="text" id="qf-title" value="${esc(it.title)}"></div>
           <div><label>Status</label><select id="qf-status">
-            ${this.data.statuses.map(s =>
-              `<option value="${s}" ${it.status === s ? "selected" : ""}>${s}</option>`).join("")}
+            ${(this.data.statuses.includes(it.status) || !it.status
+                ? this.data.statuses
+                // A STORED STATUS THE ENUM DOES NOT LIST would otherwise
+                // select nothing, the browser would show the first option,
+                // and saving would silently rewrite it. the-6-point-alliance
+                // is "closed" and does exactly this. Carry the real value so
+                // a save round-trips rather than quietly retyping the record.
+                : [it.status].concat(this.data.statuses)).map(s =>
+              `<option value="${s}" ${it.status === s ? "selected" : ""}>${esc(s)}</option>`).join("")}
           </select></div>
-          <div><label>Quest giver (NPC)</label>
-            <input type="text" id="qf-giver" value="${esc(it.giver || "")}"></div>
+          <div><label>Quest giver (NPC)</label><select id="qf-giver">
+            <option value="">— nobody gives this —</option>
+            ${npcOpts(it.giver)}
+          </select></div>
           <div><label>Place</label><select id="qf-place">
             <option value="">— nowhere specific —</option>
             ${places.map(([k, n]) =>
@@ -3989,6 +4412,50 @@ const Quests = {
         <textarea id="qf-beats" rows="5">${esc(this.beatsText(it.beats))}</textarea>
         <label>DM notes — twists, solutions, secrets (never player-facing)</label>
         <textarea id="qf-dm" rows="6">${esc(it.dm || "")}</textarea>
+
+        <label>Stages — the mechanical questline. Leave empty and this quest
+          behaves exactly as it always has (beats only).</label>
+        <div id="qf-stages">${(it.stages || []).map((s, i) => `
+          <div class="qstage" data-i="${i}" style="border:1px solid var(--line,#333);border-radius:6px;padding:8px;margin-bottom:8px">
+            <div class="grid2">
+              <div><label>Kind</label><select class="qs-kind">
+                ${(this.data.stage_kinds || []).map(k =>
+                  `<option value="${k}" ${s.kind === k ? "selected" : ""}>${k}</option>`).join("")}
+              </select></div>
+              <div><label>Stage title</label>
+                <input type="text" class="qs-title" value="${esc(s.title || "")}"></div>
+              <div><label>NPC — required for combat and charisma</label>
+                <select class="qs-npc">
+                  <option value="">— none —</option>${npcOpts(s.npc)}
+                </select></div>
+              <div><label>Reward line (optional)</label>
+                <input type="text" class="qs-reward" value="${esc(s.reward || "")}"></div>
+              <div><label>Stage key — fixed; each team's progress is stored under it</label>
+                <input type="text" class="qs-key" value="${esc(s.key || "")}" readonly
+                       style="opacity:.65" title="Retitling will not change this. Delete and re-add the stage to re-key it, which strands any progress under the old key."></div>
+            </div>
+            <label>Config (JSON) — the stage's own settings</label>
+            <textarea class="qs-config" rows="2">${esc(JSON.stringify(s.config || {}))}</textarea>
+            <button class="btn danger qs-del" data-i="${i}">Remove this stage</button>
+          </div>`).join("")}</div>
+        <div class="btnrow"><button class="btn" id="qf-addstage">+ Add a stage</button></div>
+
+        <label>Completion reward (JSON) — paid to every non-spectator on the
+          team when every stage has passed. Leave <code>affinity.npcs</code> out
+          and it targets whoever is standing at the quest's place.</label>
+        <textarea id="qf-rewardcfg" rows="2">${esc(JSON.stringify(it.reward_config || {}))}</textarea>
+
+        ${this.creating ? "" : `
+        <label>Teams on this questline — each keeps its own progress</label>
+        <div id="qf-runs">${this.renderRuns(it)}</div>
+        <div class="btnrow">
+          <select id="qf-teamadd">
+            ${Object.entries(this.data.teams || {})
+              .sort((a, b) => a[1].localeCompare(b[1]))
+              .map(([g, n]) => `<option value="${esc(g)}">${esc(n)}</option>`).join("")}
+          </select>
+          <button class="btn" id="qf-teamjoin">Add this team</button>
+        </div>`}
         ${it.updated ? `<p class="hint">Last saved ${esc(it.updated)}${it.author ? " · " + esc(it.author) : ""}</p>` : ""}
         <div class="btnrow">
           <button class="btn primary" id="qf-save">${this.creating ? "Create questline" : "Save questline"}</button>
@@ -3996,9 +4463,62 @@ const Quests = {
                           : '<button class="btn danger" id="qf-del">Delete…</button>'}
         </div>
       </div>`;
+    $("#qf-addstage").onclick = () => {
+      try {
+        const d = this.formSnapshot();
+        d.stages.push({ key: "", kind: "dialogue", title: "", npc: "", reward: "", config: {} });
+        this.draft = d;
+      } catch (e2) { toast(e2.message, true); return; }
+      this.renderEditor();
+    };
+    box.querySelectorAll(".qs-del").forEach(b => {
+      b.onclick = () => {
+        try {
+          const d = this.formSnapshot();
+          d.stages.splice(Number(b.dataset.i), 1);
+          this.draft = d;
+        } catch (e2) { toast(e2.message, true); return; }
+        this.renderEditor();
+      };
+    });
+    if (!this.creating) {
+      $("#qf-teamjoin").onclick = () => {
+        const team = $("#qf-teamadd").value;
+        if (!team) return;
+        api("/api/dash/quest-team",
+            { key: it.key, team, author: $("#qf-author").value.trim() })
+          .then(j => { toast(j.already ? "Already on it" : "Team added"); this.load(); })
+          .catch(e2 => toast(e2.message, true));
+      };
+      box.querySelectorAll(".qs-pass, .qs-fail").forEach(b => {
+        b.onclick = () => {
+          api("/api/dash/quest-stage", {
+            key: it.key, team: b.dataset.g, stage: b.dataset.s,
+            action: b.classList.contains("qs-pass") ? "pass" : "fail",
+            author: $("#qf-author").value.trim(),
+          }).then(j => { toast(j.note || "Ruled"); this.load(); })
+            .catch(e2 => toast(e2.message, true));
+        };
+      });
+      box.querySelectorAll(".qr-del").forEach(b => {
+        b.onclick = () => {
+          const nm = (this.data.teams || {})[b.dataset.g] || b.dataset.g;
+          if (!confirm(`Take ${nm} off this questline? Their stage progress goes with them.`))
+            return;
+          api("/api/dash/quest-team",
+              { key: it.key, team: b.dataset.g, remove: true,
+                author: $("#qf-author").value.trim() })
+            .then(() => { toast("Team removed"); this.load(); })
+            .catch(e2 => toast(e2.message, true));
+        };
+      });
+    }
     $("#qf-save").onclick = () => {
       const author = $("#qf-author").value.trim();
       if (author) localStorage.setItem("ht_author", author);
+      let stages, rewardCfg;
+      try { stages = this.collectStages(); rewardCfg = this.rewardCfg(); }
+      catch (e2) { toast(e2.message, true); return; }
       api("/api/dash/quest", {
         key: this.creating ? null : it.key,
         title: $("#qf-title").value,
@@ -4009,9 +4529,22 @@ const Quests = {
         summary: $("#qf-summary").value,
         beats: this.parseBeats($("#qf-beats").value),
         dm: $("#qf-dm").value,
+        stages,
+        reward_config: rewardCfg,
         author,
       }).then(j => {
-        toast(this.creating ? "Questline created" : "Questline saved");
+        const _o = j.orphaned || {};
+        const _n = Object.keys(_o).length;
+        if (_n) {
+          alert("Saved, but progress was STRANDED." + "\n\n"
+            + Object.entries(_o).map(([g, ks]) =>
+                ((this.data.teams || {})[g] || g) + ": " + ks.join(", ")).join("\n")
+            + "\n\nThose teams track stages this questline no longer has, so"
+            + " nothing of theirs is open. Re-add the stage under its old key,"
+            + " or take the team off and back on to reseed the run.");
+        }
+        toast(this.creating ? "Questline created"
+              : (_n ? "Saved \u2014 progress stranded" : "Questline saved"), !!_n);
         this.creating = false;
         this.sel = j.key;
         this.load();
