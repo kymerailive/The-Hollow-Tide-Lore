@@ -1193,6 +1193,7 @@
 </div>
 
 <div id="toast"></div>
+<div id="restartbanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:6px 10px;text-align:center;background:#b28c2e;color:#fff;font-size:13px">The bot is restarting or unreachable. Your login is kept; retrying.</div>
 <div id="tokengate" style="display:none">
   <div class="card">
     <h2>Connect to the bot</h2>
@@ -1608,19 +1609,61 @@ async function loadSpectators() {
   });
 }
 
-async function api(path, body) {
-  const r = await fetch(API + path, {
+// A bot restart is not a bad token. A refused connection, a 502/503/504 from
+// the funnel, or a 401 while /healthz is not ready all say "the bot is not
+// there yet", so the token is kept, a banner is shown and a GET is retried.
+// Only a 401 that survives a retry against a bot whose /healthz says ready
+// means the stored token is wrong.
+const RESTART_WAITS = [1500, 3000, 6000];
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+function restartBanner(on) {
+  const b = $("#restartbanner");
+  if (b) b.style.display = on ? "block" : "none";
+}
+async function botReady() {
+  try {
+    // The body decides, never the status: /healthz answers 503 with
+    // ready:true while only the model is down, and that is a ready bot. A
+    // proxy's 502 page is not JSON, so it reads false below.
+    const r = await fetch(API + "/healthz");
+    const j = await r.json();
+    return !!j.ready;
+  } catch (e) { return false; }
+}
+async function apiFetch(path, body) {
+  return fetch(API + path, {
     method: body ? "POST" : "GET",
     headers: { "Authorization": "Bearer " + TOKEN,
                ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+async function api(path, body) {
+  let r = null;
+  for (let i = 0; ; i++) {
+    let down = false;
+    try {
+      r = await apiFetch(path, body);
+      down = r.status === 502 || r.status === 503 || r.status === 504;
+      if (r.status === 401) {
+        if (!(await botReady())) down = true;
+        else if (i === 0 && !body) down = true;   // a GET gets one retry before a ready bot's 401 counts; a POST is never replayed, so it cannot be put off
+      }
+    } catch (e) { down = true; }
+    if (!down) break;
+    restartBanner(true);
+    // A POST is never replayed: it may already have been applied.
+    if (body || i >= RESTART_WAITS.length) throw new Error("bot unavailable");
+    await sleep(RESTART_WAITS[i]);
+  }
+  restartBanner(false);
   if (r.status === 401) {
     localStorage.removeItem("ht_token");
     openGate();
     throw new Error("unauthorized");
   }
-  const j = await r.json();
+  let j = {};
+  try { j = await r.json(); } catch (e) { if (r.ok) throw e; }
   if (!r.ok) throw new Error(j.error || r.status);
   return j;
 }
