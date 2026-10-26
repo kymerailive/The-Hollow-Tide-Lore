@@ -305,6 +305,16 @@
   .npcdot::before { content: ""; position: absolute; left: 50%; top: 50%;
             width: 44px; height: 44px; border-radius: 50%;
             transform: translate(-50%, -50%); }
+  /* The 44px above is the touch minimum, but neighbouring dots on a ring sit
+     17px apart, so 44px rings pile on each other and a point on one dot lands
+     on the next. The script sets --hit to the gap to the neighbour (44px at
+     most), which wins here by coming later. */
+  .npcdot::before { width: var(--hit, 44px); height: var(--hit, 44px); }
+  /* The count dot: when a place holds more NPCs than the ring can seat, the
+     last seat is this one, saying how many more stand there. Dark and dashed so
+     it reads as a number and not as one more person. */
+  .npcdot.npcmore { background: #2a3150; border-style: dashed;
+            font-size: 6.5px; letter-spacing: -.3px; }
   /* ---------- co-presence ---------- */
   .coprow { padding: 8px 2px; border-bottom: 1px dotted var(--line); }
   .coprow:last-of-type { border-bottom: 0; }
@@ -1369,6 +1379,7 @@ function applyView() {
   view.ty = Math.min(0, Math.max(view.ty, r.height * (1 - view.k)));
   zoomer.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`;
   zoomer.style.setProperty("--inv", 1 / view.k);
+  refreshNpcDots();
 }
 wrap.addEventListener("wheel", e => {
   e.preventDefault();
@@ -1855,7 +1866,7 @@ document.addEventListener("click", ev => {
    Coarse pointers only: on a desktop, hover already answers this and a toast
    on every click would be noise. */
 const TIPPED = ".sub, .nm, .fx, .fchip, .isldot, .nowhere, .badge, .chip,"
-             + " .pip, .bnpc, .npcdot, .npcchip, .bars i";
+             + " .pip, .bnpc, .npcdot:not(.npcmore), .npcchip, .bars i";
 const COARSE = () => window.matchMedia("(hover: none), (pointer: coarse)").matches;
 document.addEventListener("click", ev => {
   if (!COARSE()) return;
@@ -2278,32 +2289,114 @@ function renderWounded() {
       .catch(e => toast(e.message, true));
   });
 }
-/* An NPC standing at a place gets a dot beside the pin, offset around it so a
-   garrison of six does not stack into one marker. Same 44px hit ring as a
-   pawn — see the .place comment — because on a phone this is how a dev picks
-   one out. */
+/* ================= NPC DOTS ================= */
+/* An NPC standing at a place gets a dot beside the pin, set round ONE ring so
+   a garrison does not stack into one marker. The ring is 17px in the zoomed
+   layer, so on screen it grows with the zoom while a dot stays 15px: how many
+   dots fit round it without touching is npcRingCap(k), six at 1x and more as
+   the map is zoomed in. A place holding more NPCs than that shows one fewer
+   dot than the ring has seats and a count dot in the last seat, so a crowd
+   takes no more room on the map than the ring it always had. The count dot's
+   title names who is behind it, and a click or tap on it opens the place
+   card, which lists everyone (the tap-to-read handler leaves it alone, see
+   TIPPED). A dot's hit ring is the 44px a thumb needs only while the dots are
+   that far apart: npcHitPx narrows it to the gap to the next dot on the same
+   ring, so within a ring a point resolves to the dot nearest it and never to
+   its neighbour, and zooming in widens it again. */
+const NPC_DOT_PX = 15, NPC_DOT_GAP = 2, NPC_RING_PX = 17, NPC_MORE_NAMES = 12;
+let npcDotCap = 0;     // the ring capacity the dots now on the map were laid out for
+function npcRingCap(k) {
+  const half = (NPC_DOT_PX + NPC_DOT_GAP) / (2 * NPC_RING_PX * (k > 1 ? k : 1));
+  // The epsilon matters: at 1x this is 5.999999999999999, which floors to five,
+  // and the ring has always seated six.
+  return Math.floor(Math.PI / Math.asin(Math.min(1, half)) + 1e-9);
+}
+/* The NPCs in the order the ring seats them. When everyone fits that is the
+   order the server sent. When some will be hidden it is one from each team
+   before a second from any, so a crowd of one team cannot push the other
+   teams standing there off the ring. */
+function npcDotOrder(npcs, shown) {
+  if (npcs.length <= shown) return npcs.slice();
+  const lanes = new Map();
+  for (const n of npcs) {
+    const t = n.team || "";
+    if (!lanes.has(t)) lanes.set(t, []);
+    lanes.get(t).push(n);
+  }
+  const out = [];
+  for (let row = 0; out.length < npcs.length; row++)
+    for (const lane of lanes.values()) if (row < lane.length) out.push(lane[row]);
+  return out;
+}
+/* One entry per dot to draw: where it sits on the ring in px, and either the
+   NPC it stands for or the list of NPCs the count dot stands for. */
+function npcDotRing(npcs, cap) {
+  const over = npcs.length > cap;
+  const seats = over ? cap : npcs.length;
+  const shown = over ? cap - 1 : npcs.length;
+  const ordered = npcDotOrder(npcs, shown);
+  const out = [];
+  for (let i = 0; i < seats; i++) {
+    const ang = (i / seats) * Math.PI * 2;
+    const at = { ox: Math.cos(ang) * NPC_RING_PX, oy: Math.sin(ang) * NPC_RING_PX };
+    if (i < shown) at.npc = ordered[i];
+    else at.more = ordered.slice(shown);
+    out.push(at);
+  }
+  return out;
+}
+/* How wide a dot's invisible hit ring may be, in screen px: 44 for a lone dot,
+   and for a ring of dots no wider than the gap between neighbours, so two rings
+   never overlap (the gap is the chord, 2 * radius * k * sin(PI / seats)). */
+function npcHitPx(seats, k) {
+  if (seats < 2) return 44;
+  const chord = 2 * NPC_RING_PX * (k > 1 ? k : 1) * Math.sin(Math.PI / seats);
+  return Math.max(NPC_DOT_PX, Math.min(44, Math.floor(chord + 1e-6)));
+}
 function renderNpcDots() {
   if (!COP || !state) return;
+  const cap = npcRingCap(view.k);
+  npcDotCap = cap;
   for (const r of COP.places || []) {
     const p = state.places[r.place];
     if (!p || !r.npcs.length) continue;
-    r.npcs.forEach((n, i) => {
-      const ang = (i / Math.max(r.npcs.length, 1)) * Math.PI * 2;
+    const ring = npcDotRing(r.npcs, cap);
+    const hit = npcHitPx(ring.length, view.k);
+    for (const d of ring) {
       const el = document.createElement("div");
-      el.className = "npcdot";
-      el.dataset.npc = n.key;
       el.style.left = pct(p.x, "x");
       el.style.top = pct(p.y, "y");
-      el.style.setProperty("--ox", (Math.cos(ang) * 17).toFixed(1) + "px");
-      el.style.setProperty("--oy", (Math.sin(ang) * 17).toFixed(1) + "px");
-      el.style.background = teamColor[n.team] || "#6b7290";
-      el.textContent = initials(n.name);
-      el.title = n.name + (n.team_name ? " — " + n.team_name : "")
-                        + (n.at_base ? " (at base)" : "");
+      el.style.setProperty("--ox", d.ox.toFixed(1) + "px");
+      el.style.setProperty("--oy", d.oy.toFixed(1) + "px");
+      el.style.setProperty("--hit", hit + "px");
+      if (d.more) {
+        const names = d.more.map(n => n.name);
+        el.className = "npcdot npcmore";
+        el.textContent = d.more.length > 99 ? "99+" : "+" + d.more.length;
+        el.title = d.more.length + " more here: "
+                   + names.slice(0, NPC_MORE_NAMES).join(", ")
+                   + (names.length > NPC_MORE_NAMES ? ", …" : "");
+      } else {
+        const n = d.npc;
+        el.className = "npcdot";
+        el.dataset.npc = n.key;
+        el.style.background = teamColor[n.team] || "#6b7290";
+        el.textContent = initials(n.name);
+        el.title = n.name + (n.team_name ? " — " + n.team_name : "")
+                          + (n.at_base ? " (at base)" : "");
+      }
       el.onclick = ev => { ev.stopPropagation(); showPlace(r.place); };
       overlay.appendChild(el);
-    });
+    }
   }
+}
+/* Zooming changes how many dots the ring can seat, so the dots are laid out
+   again when that number changes, and only then: a pan or a pinch that stays
+   inside one capacity leaves them alone. */
+function refreshNpcDots() {
+  if (!COP || !state || npcRingCap(view.k) === npcDotCap) return;
+  overlay.querySelectorAll(".npcdot").forEach(el => el.remove());
+  renderNpcDots();
 }
 function placeClicked(key) {
   const p = state.places[key];
