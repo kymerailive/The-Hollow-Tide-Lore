@@ -1283,6 +1283,34 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => Number(n || 0).toLocaleString();
+// A player's own timezone and weekday hours, as they submitted them with
+// /timezone. Read-only and dev-only. Hours are whole-hour blocks in the zone
+// the answer was SAVED in, so that zone is named whenever it differs from the
+// player's current one. Returns "" when the payload predates the field (says
+// nothing rather than "not answered", which would be false).
+const availLine = p => {
+  if (p.tz === undefined) return "";
+  const zone = p.tz ? esc(p.tz) : "no timezone set";
+  const a = p.avail;
+  if (!a) return `Timezone: ${zone} · hours: not answered`;
+  const names = [["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"],
+                 ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"]];
+  const runs = hs => {
+    const out = [];
+    let start = null, prev = null;
+    for (const h of [...hs].sort((x, y) => x - y).concat([null])) {
+      if (start !== null && h !== prev + 1) { out.push(`${start}-${prev + 1}`); start = null; }
+      if (h !== null && start === null) start = h;
+      prev = h;
+    }
+    return out.join(", ");
+  };
+  const days = names.map(([k, n]) => [n, runs((a.days || {})[k] || [])]).filter(([, r]) => r);
+  const saved = a.tz && a.tz !== p.tz ? ` (saved in ${esc(a.tz)})` : "";
+  const body = days.length ? days.map(([n, r]) => `${n} ${esc(r)}`).join(" · ") : "answered, none free";
+  const note = a.note ? ` · note: ${esc(a.note)}` : "";
+  return `Timezone: ${zone} · hours${saved}: ${body}${note}`;
+};
 // Compact money for list rows (editors always show the full figure).
 const fmtC = n => {
   n = Number(n || 0);
@@ -2916,6 +2944,7 @@ const Players = {
            — reserved, so nobody else can take them.
            <button class="btn mini" id="pf-formerclear">Release</button></p>`
         : ""}
+      ${availLine(p) ? `<p class="hint" id="pf-avail">${availLine(p)}</p>` : ""}
       <div class="frm">
         <div class="grid2">
           <div><label>Name</label><input type="text" id="pf-name" value="${esc(p.name)}"></div>
